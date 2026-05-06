@@ -1,3 +1,10 @@
+/*
+Copyright 2026 Dejan Jarc
+
+Licensed under the Apache License, Version 2.0.
+You may not use this file except in compliance with the License.
+*/
+
 const APP_CONFIG = {
   APP_NAME: 'Dorm 14 Laundry Schedule',
   MENU_NAME: 'Dorm 14 Laundry',
