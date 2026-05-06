@@ -474,4 +474,7 @@ This prototype has some work left to finalize:
 
 ## License / ownership
 
-See LICENCE.
+Copyright 2026 Dejan Jarc
+
+Licensed under the Apache License, Version 2.0.
+See the LICENSE file for details.
