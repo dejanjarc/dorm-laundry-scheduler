@@ -1,0 +1,1247 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dorm 14 Laundry Admin</title>
+    <style>
+      :root {
+        --bg: #f5f7fb;
+        --card: #ffffff;
+        --text: #0f2340;
+        --muted: #55657f;
+        --accent: #2f6fed;
+        --border: #d9e2f0;
+        --ok: #18794e;
+        --warn: #9a6700;
+        --danger: #b42318;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        font-family: Inter, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .wrap {
+        width: min(1280px, 100%);
+        margin: 0 auto;
+        padding: 14px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .hidden { display: none !important; }
+
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 8px 24px rgba(10, 30, 60, 0.06);
+        padding: 20px;
+      }
+
+      .hero h1 {
+        margin: 0 0 8px;
+        font-size: 30px;
+      }
+
+      .hero p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .section-title {
+        margin: 0 0 10px;
+        font-size: 20px;
+      }
+
+      .helper {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.45;
+      }
+
+      .auth-shell {
+        width: min(720px, 100%);
+        margin: 0 auto;
+        display: grid;
+        gap: 10px;
+      }
+
+      label {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      input, textarea, select {
+        width: 100%;
+        padding: 13px 14px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font-size: 16px;
+        font-family: inherit;
+        background: #fff;
+        color: var(--text);
+      }
+
+      textarea {
+        min-height: 92px;
+        resize: vertical;
+      }
+
+      input:focus, textarea:focus, select:focus {
+        outline: 2px solid rgba(47, 111, 237, 0.18);
+        border-color: var(--accent);
+      }
+
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 12px 15px;
+        cursor: pointer;
+        font-size: 15px;
+        transition: transform 0.08s ease, opacity 0.15s ease, background-color 0.18s ease, color 0.18s ease;
+      }
+
+      button:hover { transform: translateY(-1px); }
+      button:disabled { opacity: 0.6; cursor: default; transform: none; }
+
+      .btn-primary { background: var(--accent); color: #fff; }
+      .btn-secondary { background: #eef3ff; color: var(--accent); }
+      .btn-muted { background: #eef2f7; color: var(--muted); }
+      .btn-danger { background: #fff1f1; color: var(--danger); }
+      .btn-ok { background: #eaf8ef; color: var(--ok); }
+
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .status {
+        min-height: 22px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+
+      .dashboard-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .dashboard-topbar h1 {
+        margin: 0 0 6px;
+        font-size: 28px;
+      }
+
+      .dashboard-topbar p {
+        margin: 0;
+        color: var(--muted);
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+      }
+
+      .stat-card {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #fbfdff;
+        padding: 14px;
+      }
+
+      .stat-card strong {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 6px;
+      }
+
+      .stat-value {
+        font-size: 24px;
+        font-weight: 800;
+      }
+
+      .toolbar-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 220px auto;
+        gap: 10px;
+        align-items: end;
+      }
+
+      .resident-shell {
+        padding: 14px;
+      }
+
+      .resident-list {
+        display: grid;
+        gap: 12px;
+        max-height: 70vh;
+        overflow-y: auto;
+      }
+
+      .resident-card {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        overflow: hidden;
+        background: #fff;
+      }
+
+      .resident-card[open] {
+        box-shadow: 0 8px 22px rgba(10, 30, 60, 0.08);
+      }
+
+      .resident-summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 14px 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .resident-summary::-webkit-details-marker { display: none; }
+
+      .resident-summary-main {
+        min-width: 0;
+        display: grid;
+        gap: 6px;
+      }
+
+      .resident-summary-title {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .resident-summary-title strong {
+        font-size: 18px;
+      }
+
+      .resident-summary-subtitle {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .resident-summary-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+
+      .resident-body {
+        border-top: 1px solid var(--border);
+        padding: 16px;
+        display: grid;
+        gap: 14px;
+        background: #fbfdff;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .full-span {
+        grid-column: 1 / -1;
+      }
+
+      .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 10px;
+      }
+
+      .meta-item {
+        padding: 12px;
+        border-radius: 12px;
+        border: 1px solid var(--border);
+        background: #fff;
+      }
+
+      .meta-item strong {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-bottom: 5px;
+      }
+
+      .pill {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .pill.active { background: #eaf8ef; color: var(--ok); }
+      .pill.stale { background: #fff8e6; color: var(--warn); }
+      .pill.inactive { background: #fff1f1; color: var(--danger); }
+      .pill.recovery { background: #eef3ff; color: var(--accent); }
+      .pill.none { background: #eef2f7; color: var(--muted); }
+
+      .reservation-list-inline {
+        display: grid;
+        gap: 8px;
+      }
+
+      .reservation-row {
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: #fff;
+        padding: 10px 12px;
+      }
+
+      .reservation-row strong {
+        display: block;
+        margin-bottom: 3px;
+      }
+
+      .inline-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .banner {
+        position: fixed;
+        left: 50%;
+        bottom: 18px;
+        transform: translateX(-50%);
+        z-index: 9000;
+        min-width: min(420px, calc(100vw - 24px));
+        max-width: calc(100vw - 24px);
+        padding: 12px 14px;
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        background: rgba(255,255,255,0.98);
+        box-shadow: 0 14px 30px rgba(10,30,60,0.16);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.2s ease, transform 0.2s ease;
+      }
+
+      .banner.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+      }
+
+      .banner.ok { color: var(--ok); }
+      .banner.warn { color: var(--warn); }
+      .banner.error { color: var(--danger); }
+      .banner.info { color: var(--accent); }
+
+      .overlay, .confirm-overlay, .code-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(14, 24, 38, 0.42);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 9999;
+      }
+
+      .overlay.show, .confirm-overlay.show, .code-overlay.show { display: flex; }
+
+      .overlay-card, .confirm-card, .code-card {
+        width: min(520px, 100%);
+        background: #ffffff;
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 18px 45px rgba(10, 30, 60, 0.22);
+        border: 1px solid rgba(255,255,255,0.9);
+      }
+
+      .spinner {
+        width: 44px;
+        height: 44px;
+        margin: 0 auto 16px;
+        border: 4px solid #d8e5ff;
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.85s linear infinite;
+      }
+
+      .overlay-card { text-align: center; }
+
+      .overlay-title, .confirm-title, .code-title {
+        margin: 0 0 8px;
+        font-size: 21px;
+      }
+
+      .overlay-text, .confirm-text, .code-text {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.45;
+      }
+
+      .confirm-text, .code-text { margin-bottom: 18px; }
+
+      .confirm-actions, .code-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+      }
+
+      .code-box {
+        margin: 16px 0 18px;
+        padding: 18px 14px;
+        text-align: center;
+        border-radius: 16px;
+        background: #f5f8ff;
+        border: 1px dashed #bcd0ff;
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: 2px;
+        color: var(--accent);
+      }
+
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      @media (max-width: 820px) {
+        .toolbar-grid,
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .wrap { padding: 10px; }
+        .card { padding: 18px; }
+        .dashboard-topbar h1 { font-size: 25px; }
+        .resident-summary {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .resident-summary-right {
+          justify-content: flex-start;
+        }
+        .inline-actions,
+        .actions,
+        .confirm-actions,
+        .code-actions {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+        button, input, textarea, select {
+          min-height: 54px;
+          font-size: 17px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="overlay" id="busyOverlay">
+      <div class="overlay-card">
+        <div class="spinner"></div>
+        <h2 class="overlay-title" id="busyTitle">Working…</h2>
+        <p class="overlay-text" id="busyText">Please wait.</p>
+      </div>
+    </div>
+
+    <div class="confirm-overlay" id="confirmOverlay">
+      <div class="confirm-card">
+        <h2 class="confirm-title" id="confirmTitle">Please confirm</h2>
+        <p class="confirm-text" id="confirmText">Are you sure?</p>
+        <div class="confirm-actions">
+          <button class="btn-muted" id="confirmCancelBtn">Go back</button>
+          <button class="btn-danger" id="confirmOkBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-overlay" id="codeOverlay">
+      <div class="code-card">
+        <h2 class="code-title" id="codeTitle">New access code</h2>
+        <p class="code-text" id="codeText">Save this code now.</p>
+        <div class="code-box" id="codeValue">ABC123</div>
+        <div class="code-actions">
+          <button class="btn-secondary" id="copyCodeBtn">Copy code</button>
+          <button class="btn-primary" id="closeCodeBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="banner" id="banner"></div>
+
+    <div class="wrap">
+      <section id="authView" class="card auth-shell">
+        <div class="hero">
+          <h1>Dorm 14 Admin Dashboard</h1>
+          <p>Sign in with a resident account that is allowed to use admin mode, then enter the admin PIN.</p>
+        </div>
+
+        <h2 class="section-title">Admin sign in</h2>
+        <p class="helper">This is separate from the resident dashboard. You need your resident room, access code, and the admin PIN.</p>
+
+        <label for="adminRoomInput">Room number</label>
+        <input id="adminRoomInput" type="text" placeholder="Example: 101 or P01">
+
+        <label for="adminCodeInput">Access code</label>
+        <input id="adminCodeInput" type="text" placeholder="Example: A7K9P2">
+
+        <label for="adminPinInput">Admin PIN</label>
+        <input id="adminPinInput" type="password" placeholder="Admin PIN">
+
+        <div class="actions">
+          <button class="btn-primary" onclick="loginAdmin()">Open admin dashboard</button>
+        </div>
+
+        <div class="status" id="authStatus"></div>
+      </section>
+
+      <section id="dashboardView" class="hidden">
+        <div class="card dashboard-topbar">
+          <div>
+            <h1>Resident administration</h1>
+            <p id="dashboardSubtitle">Signed in as admin.</p>
+          </div>
+          <div class="actions">
+            <button class="btn-secondary" onclick="openUserDashboard()">User dashboard</button>
+            <button class="btn-secondary" onclick="refreshAdminDashboard()">Refresh</button>
+            <button class="btn-muted" onclick="logoutAdmin()">Log out</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="stats-grid" id="statsGrid"></div>
+        </div>
+
+        <div class="card">
+          <div class="toolbar-grid">
+            <div>
+              <label for="searchInput">Search residents</label>
+              <input id="searchInput" type="text" placeholder="Search by name, room, or resident ID">
+            </div>
+            <div>
+              <label for="filterSelect">Filter</label>
+              <select id="filterSelect">
+                <option value="all">All residents</option>
+                <option value="active">Active only</option>
+                <option value="stale">Stale active residents</option>
+                <option value="inactive">Inactive only</option>
+                <option value="with_open_reservations">With open reservations</option>
+              </select>
+            </div>
+            <div class="actions">
+              <button class="btn-primary" onclick="renderResidentList()">Apply</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card resident-shell">
+          <div class="resident-list" id="residentList"></div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      const STORAGE_KEY = 'dormLaundryAdminToken';
+      let state = {
+        adminToken: '',
+        session: null,
+        dashboard: null,
+      };
+
+      let bannerTimer = null;
+
+      const els = {
+        authView: document.getElementById('authView'),
+        dashboardView: document.getElementById('dashboardView'),
+        authStatus: document.getElementById('authStatus'),
+        adminRoomInput: document.getElementById('adminRoomInput'),
+        adminCodeInput: document.getElementById('adminCodeInput'),
+        adminPinInput: document.getElementById('adminPinInput'),
+        dashboardSubtitle: document.getElementById('dashboardSubtitle'),
+        statsGrid: document.getElementById('statsGrid'),
+        residentList: document.getElementById('residentList'),
+        searchInput: document.getElementById('searchInput'),
+        filterSelect: document.getElementById('filterSelect'),
+        busyOverlay: document.getElementById('busyOverlay'),
+        busyTitle: document.getElementById('busyTitle'),
+        busyText: document.getElementById('busyText'),
+        confirmOverlay: document.getElementById('confirmOverlay'),
+        confirmTitle: document.getElementById('confirmTitle'),
+        confirmText: document.getElementById('confirmText'),
+        confirmOkBtn: document.getElementById('confirmOkBtn'),
+        confirmCancelBtn: document.getElementById('confirmCancelBtn'),
+        codeOverlay: document.getElementById('codeOverlay'),
+        codeTitle: document.getElementById('codeTitle'),
+        codeText: document.getElementById('codeText'),
+        codeValue: document.getElementById('codeValue'),
+        copyCodeBtn: document.getElementById('copyCodeBtn'),
+        closeCodeBtn: document.getElementById('closeCodeBtn'),
+        banner: document.getElementById('banner'),
+      };
+
+      init();
+
+      function init() {
+        els.searchInput.addEventListener('input', renderResidentList);
+        els.filterSelect.addEventListener('change', renderResidentList);
+
+        const savedToken = localStorage.getItem(STORAGE_KEY);
+        if (!savedToken) return;
+
+        state.adminToken = savedToken;
+        setAuthStatus('Restoring admin session…');
+        showBusy('Restoring admin session…', 'Loading the admin dashboard.');
+        refreshAdminDashboard(true);
+      }
+
+      function openUserDashboard() {
+        showBusy('Opening user dashboard…', 'Switching to the user page.');
+
+        google.script.run
+          .withSuccessHandler((url) => {
+            console.log('ADMIN -> USER target URL:', url);
+            window.top.location.href = url;
+          })
+          .withFailureHandler((error) => {
+            hideBusy();
+            showBanner(
+              getErrorMessage(error) || 'Could not open the user dashboard.',
+              'error',
+              4200
+            );
+            console.error('ADMIN -> USER navigation failed', error);
+          })
+          .getAppPageUrl('');
+      }
+
+      function setAuthStatus(message, type) {
+        els.authStatus.textContent = message || '';
+        els.authStatus.style.color = type === 'error'
+          ? 'var(--danger)'
+          : type === 'ok'
+            ? 'var(--ok)'
+            : 'var(--muted)';
+      }
+
+      function showBusy(title, text) {
+        els.busyTitle.textContent = title || 'Working…';
+        els.busyText.textContent = text || 'Please wait.';
+        els.busyOverlay.classList.add('show');
+      }
+
+      function hideBusy() {
+        els.busyOverlay.classList.remove('show');
+      }
+
+      function showBanner(message, type = 'info', timeoutMs = 3200) {
+        if (bannerTimer) {
+          window.clearTimeout(bannerTimer);
+          bannerTimer = null;
+        }
+
+        els.banner.textContent = message || '';
+        els.banner.className = `banner ${type} show`;
+
+        bannerTimer = window.setTimeout(() => {
+          els.banner.className = 'banner';
+          els.banner.textContent = '';
+        }, timeoutMs);
+      }
+
+      function showAuthView() {
+        els.authView.classList.remove('hidden');
+        els.dashboardView.classList.add('hidden');
+      }
+
+      function showDashboardView() {
+        els.authView.classList.add('hidden');
+        els.dashboardView.classList.remove('hidden');
+      }
+
+      function askConfirm(title, text, confirmLabel = 'Confirm', confirmClass = 'btn-danger') {
+        return new Promise((resolve) => {
+          els.confirmTitle.textContent = title;
+          els.confirmText.innerHTML = text;
+          els.confirmOkBtn.textContent = confirmLabel;
+          els.confirmOkBtn.className = confirmClass;
+          els.confirmOverlay.classList.add('show');
+
+          const cleanup = (result) => {
+            els.confirmOverlay.classList.remove('show');
+            els.confirmOkBtn.onclick = null;
+            els.confirmCancelBtn.onclick = null;
+            resolve(result);
+          };
+
+          els.confirmOkBtn.onclick = () => cleanup(true);
+          els.confirmCancelBtn.onclick = () => cleanup(false);
+        });
+      }
+
+      function showCodeModal(title, text, code) {
+        els.codeTitle.textContent = title || 'New access code';
+        els.codeText.textContent = text || 'Save this code now.';
+        els.codeValue.textContent = code || '—';
+        els.codeOverlay.classList.add('show');
+
+        els.copyCodeBtn.onclick = async () => {
+          try {
+            await navigator.clipboard.writeText(code || '');
+            showBanner('Code copied.', 'ok');
+          } catch (err) {
+            showBanner('Could not copy automatically. Copy it manually.', 'warn');
+          }
+        };
+
+        els.closeCodeBtn.onclick = () => {
+          els.codeOverlay.classList.remove('show');
+          els.copyCodeBtn.onclick = null;
+          els.closeCodeBtn.onclick = null;
+        };
+      }
+
+      function handleError(error) {
+        hideBusy();
+        const message = getErrorMessage(error);
+        setAuthStatus(message, 'error');
+        showBanner(message, 'error', 4200);
+
+        if (/admin session expired|sign in again/i.test(message)) {
+          localStorage.removeItem(STORAGE_KEY);
+          state.adminToken = '';
+          state.session = null;
+          state.dashboard = null;
+          showAuthView();
+        }
+      }
+
+      function getErrorMessage(error) {
+        if (!error) return 'Something went wrong.';
+        if (typeof error === 'string') return error;
+        if (error.message) return String(error.message);
+        return String(error);
+      }
+
+      function applyAdminResponse(response, successMessage) {
+        if (!response) return;
+
+        if (response.adminToken) {
+          state.adminToken = response.adminToken;
+          localStorage.setItem(STORAGE_KEY, response.adminToken);
+        }
+
+        if (response.session) {
+          state.session = response.session;
+        }
+
+        if (response.dashboard) {
+          state.dashboard = response.dashboard;
+        }
+
+        renderDashboard();
+
+        if (response.generatedAccessCode) {
+          showCodeModal(
+            response.generatedAccessCodeLabel || 'New access code',
+            'Save this code now. The resident will need it to sign in.',
+            response.generatedAccessCode
+          );
+        }
+
+        if (successMessage) {
+          showBanner(successMessage, 'ok');
+        }
+      }
+
+      function loginAdmin() {
+        const room = els.adminRoomInput.value.trim();
+        const accessCode = els.adminCodeInput.value.trim().toUpperCase();
+        const adminPin = els.adminPinInput.value;
+
+        setAuthStatus('Signing in…');
+        showBusy('Signing in…', 'Loading the admin dashboard.');
+
+        google.script.run
+          .withSuccessHandler((response) => {
+            hideBusy();
+            setAuthStatus('Signed in.', 'ok');
+            applyAdminResponse(response, 'Admin dashboard opened.');
+            showDashboardView();
+          })
+          .withFailureHandler(handleError)
+          .verifyAdminAccess(room, accessCode, adminPin);
+      }
+
+      function refreshAdminDashboard(silent) {
+        if (!state.adminToken) return;
+
+        if (!silent) {
+          showBusy('Refreshing…', 'Loading the latest resident data.');
+        }
+
+        google.script.run
+          .withSuccessHandler((response) => {
+            hideBusy();
+            applyAdminResponse(response, silent ? '' : 'Dashboard refreshed.');
+            showDashboardView();
+          })
+          .withFailureHandler(handleError)
+          .adminRefreshDashboard(state.adminToken);
+      }
+
+      function logoutAdmin() {
+        const token = state.adminToken;
+        localStorage.removeItem(STORAGE_KEY);
+        state = { adminToken: '', session: null, dashboard: null };
+        showAuthView();
+        setAuthStatus('Logged out.', 'ok');
+        showBanner('Logged out.', 'ok');
+
+        if (token) {
+          google.script.run.adminLogout(token);
+        }
+      }
+
+      function renderDashboard() {
+        if (!state.dashboard) return;
+
+        const session = state.session || {};
+        els.dashboardSubtitle.textContent =
+          `Admin session: ${session.viewerDisplayName || '—'} · room ${session.viewerRoom || '—'}`;
+
+        renderStats();
+        renderResidentList();
+      }
+
+      function renderStats() {
+        const stats = (state.dashboard && state.dashboard.stats) || {};
+        const cards = [
+          ['Total residents', stats.totalResidents || 0],
+          ['Active residents', stats.activeResidents || 0],
+          ['Inactive residents', stats.inactiveResidents || 0],
+          ['Stale residents', stats.staleResidents || 0],
+          ['With recovery key', stats.residentsWithRecoveryKey || 0],
+          ['Open reservations', stats.openReservations || 0],
+        ];
+
+        els.statsGrid.innerHTML = cards.map(([label, value]) => `
+          <div class="stat-card">
+            <strong>${escapeHtml(label)}</strong>
+            <div class="stat-value">${escapeHtml(String(value))}</div>
+          </div>
+        `).join('');
+      }
+
+      function getFilteredResidents() {
+        const residents = (state.dashboard && state.dashboard.residents) || [];
+        const search = normalizeAdminSearchText(els.searchInput.value);
+        const filter = els.filterSelect.value;
+
+        return residents.filter(resident => {
+          if (filter === 'active' && !resident.active) return false;
+          if (filter === 'stale' && !resident.isStale) return false;
+          if (filter === 'inactive' && resident.active) return false;
+          if (filter === 'with_open_reservations' && !(resident.reservationStats && resident.reservationStats.openCount > 0)) return false;
+
+          if (!search) return true;
+
+          const haystack = normalizeAdminSearchText([
+            resident.displayName,
+            resident.room,
+            resident.residentId,
+            resident.notes,
+            resident.active ? 'active' : 'inactive',
+          ].join(' '));
+
+          return haystack.includes(search);
+        });
+      }
+
+      function renderResidentList() {
+        const residents = getFilteredResidents();
+
+        if (!residents.length) {
+          els.residentList.innerHTML = '<div class="helper"><i>No residents match the current filter.</i></div>';
+          return;
+        }
+
+        els.residentList.innerHTML = residents.map(renderResidentCard).join('');
+      }
+
+      function renderResidentCard(resident) {
+        const statusPill = resident.active
+          ? '<span class="pill active">Active</span>'
+          : '<span class="pill inactive">Inactive</span>';
+
+        const recoveryPill = resident.hasRecoveryKey
+          ? '<span class="pill recovery">Recovery key saved</span>'
+          : '<span class="pill none">No recovery key</span>';
+
+        const stalePill = resident.isStale
+          ? '<span class="pill stale">Stale / not blocking room</span>'
+          : '';
+
+        const reservations = resident.reservations || [];
+        const reservationsHtml = reservations.length
+          ? `
+            <div class="reservation-list-inline">
+              ${reservations.map(item => `
+                <div class="reservation-row">
+                  <strong>${escapeHtml(item.dayLabel)} · ${escapeHtml(item.slotLabel)}</strong>
+                  <div class="helper">Machine ${escapeHtml(String(item.machineNo || '—'))} · ${escapeHtml(formatDateTime(item.startIso))}</div>
+                </div>
+              `).join('')}
+            </div>
+          `
+          : '<div class="helper"><i>No open reservations.</i></div>';
+
+        const actionButtons = resident.active
+          ? `
+            <button class="btn-danger" onclick="deactivateResident('${escapeJs(resident.residentId)}')">Deactivate</button>
+            <button class="btn-danger" onclick="deleteResident('${escapeJs(resident.residentId)}')">Delete permanently</button>
+          `
+          : `
+            <button class="btn-ok" onclick="reactivateResident('${escapeJs(resident.residentId)}')">Reactivate</button>
+            <button class="btn-danger" onclick="deleteResident('${escapeJs(resident.residentId)}')">Delete permanently</button>
+          `;
+
+        return `
+          <details class="resident-card" id="resident_${escapeAttr(resident.residentId)}">
+            <summary class="resident-summary">
+              <div class="resident-summary-main">
+                <div class="resident-summary-title">
+                  <strong>${escapeHtml(resident.displayName)}</strong>
+                  ${statusPill}
+                  ${recoveryPill}
+                  ${stalePill}
+                </div>
+                <div class="resident-summary-subtitle">
+                  Room ${escapeHtml(resident.room || '—')} · ${escapeHtml(resident.residentId)} ·
+                  Last activity: ${escapeHtml(formatDateTime(resident.lastActivityAtIso) || 'Never')}
+                </div>
+              </div>
+              <div class="resident-summary-right">
+                <span class="pill none">${escapeHtml(String((resident.reservationStats && resident.reservationStats.openCount) || 0))} open reservations</span>
+                <span class="helper">Tap to manage</span>
+              </div>
+            </summary>
+
+            <div class="resident-body">
+              <div class="form-grid">
+                <div>
+                  <label for="name_${escapeAttr(resident.residentId)}">Full name</label>
+                  <input id="name_${escapeAttr(resident.residentId)}" type="text" value="${escapeAttr(resident.displayName || '')}">
+                </div>
+                <div>
+                  <label for="room_${escapeAttr(resident.residentId)}">Room number</label>
+                  <input id="room_${escapeAttr(resident.residentId)}" type="text" value="${escapeAttr(resident.room || '')}">
+                </div>
+                <div class="full-span">
+                  <label for="notes_${escapeAttr(resident.residentId)}">Notes</label>
+                  <textarea id="notes_${escapeAttr(resident.residentId)}">${escapeHtml(resident.notes || '')}</textarea>
+                </div>
+              </div>
+
+              <div class="meta-grid">
+                <div class="meta-item">
+                  <strong>Access code</strong>
+                  ${escapeHtml(resident.accessCode || '—')}
+                </div>
+                <div class="meta-item">
+                  <strong>Recovery key</strong>
+                  ${resident.hasRecoveryKey ? 'Saved' : 'Not set'}
+                </div>
+                <div class="meta-item">
+                  <strong>Registered</strong>
+                  ${escapeHtml(formatDateTime(resident.registeredAtIso) || '—')}
+                </div>
+                <div class="meta-item">
+                  <strong>Updated</strong>
+                  ${escapeHtml(formatDateTime(resident.updatedAtIso) || '—')}
+                </div>
+                <div class="meta-item">
+                  <strong>Open reservations</strong>
+                  ${escapeHtml(String((resident.reservationStats && resident.reservationStats.openCount) || 0))}
+                </div>
+                <div class="meta-item">
+                  <strong>Running now</strong>
+                  ${escapeHtml(String((resident.reservationStats && resident.reservationStats.runningCount) || 0))}
+                </div>
+                <div class="meta-item">
+                  <strong>Last login</strong>
+                  ${escapeHtml(formatDateTime(resident.lastLoginAtIso) || 'Never')}
+                </div>
+                <div class="meta-item">
+                  <strong>Disabled at</strong>
+                  ${escapeHtml(formatDateTime(resident.disabledAtIso) || '—')}
+                </div>
+                <div class="meta-item">
+                  <strong>Disabled reason</strong>
+                  ${escapeHtml(resident.disabledReason || '—')}
+                </div>
+              </div>
+
+              <div>
+                <strong>Open reservations</strong>
+                <div style="margin-top:8px;">
+                  ${reservationsHtml}
+                </div>
+              </div>
+
+              <div class="inline-actions">
+                <button class="btn-secondary" onclick="saveResident('${escapeJs(resident.residentId)}')">Save account info</button>
+                <button class="btn-primary" onclick="resetResidentCode('${escapeJs(resident.residentId)}')">Reset access code</button>
+                <button class="btn-muted" onclick="cancelResidentReservations('${escapeJs(resident.residentId)}')">Cancel open reservations</button>
+              </div>
+
+              <div class="form-grid">
+                <div class="full-span">
+                  <label for="recovery_${escapeAttr(resident.residentId)}">Set new recovery key</label>
+                  <input id="recovery_${escapeAttr(resident.residentId)}" type="password" placeholder="New recovery key">
+                </div>
+              </div>
+
+              <div class="inline-actions">
+                <button class="btn-secondary" onclick="setResidentRecoveryKey('${escapeJs(resident.residentId)}')">Save recovery key</button>
+                <button class="btn-muted" onclick="clearResidentRecoveryKey('${escapeJs(resident.residentId)}')">Clear recovery key</button>
+              </div>
+
+              <div class="inline-actions">
+                ${actionButtons}
+              </div>
+            </div>
+          </details>
+        `;
+      }
+
+      function saveResident(residentId) {
+        const name = getInputValue(`name_${residentId}`);
+        const room = getInputValue(`room_${residentId}`).toUpperCase();
+        const notes = getInputValue(`notes_${residentId}`);
+
+        showBusy('Saving account info…', 'Updating the resident account.');
+
+        google.script.run
+          .withSuccessHandler((response) => {
+            hideBusy();
+            applyAdminResponse(response, 'Resident account updated.');
+          })
+          .withFailureHandler(handleError)
+          .adminUpdateResidentProfile(state.adminToken, residentId, name, room, notes);
+      }
+
+      async function resetResidentCode(residentId) {
+        const sure = await askConfirm(
+          'Reset access code?',
+          'A new access code will be generated immediately. The old code will stop working.',
+          'Reset code',
+          'btn-primary'
+        );
+        if (!sure) return;
+
+        showBusy('Resetting access code…', 'Generating a new access code.');
+
+        google.script.run
+          .withSuccessHandler((response) => {
+            hideBusy();
+            applyAdminResponse(response, 'Access code reset.');
+          })
+          .withFailureHandler(handleError)
+          .adminResetResidentCode(state.adminToken, residentId);
+      }
+
+      async function setResidentRecoveryKey(residentId) {
+        const recoveryKey = getInputValue(`recovery_${residentId}`);
+        if (!recoveryKey || recoveryKey.length < 4) {
+          showBanner('Choose a recovery key with at least 4 characters.', 'warn');
+          return;
+        }
+
+        showBusy('Saving recovery key…', 'Updating the resident recovery key.');
+
+        google.script.run
+          .withSuccessHandler((response) => {
+            hideBusy();
+            clearInput(`recovery_${residentId}`);
+            applyAdminResponse(response, 'Recovery key saved.');
+          })
+          .withFailureHandler(handleError)
+          .adminSetResidentRecoveryKey(state.adminToken, residentId, recoveryKey);
+      }
+
+      async function clearResidentRecoveryKey(residentId) {
+        const sure = await askConfirm(
+          'Clear recovery key?',
+          'The resident will no longer be able to use self-service reset until a new recovery key is saved.',
+          'Clear recovery key',
+          'btn-danger'
+        );
+        if (!sure) return;
+
+        showBusy('Clearing recovery key…', 'Removing the resident recovery key.');
+
+        google.script.run
+          .withSuccessHandler((response) => {
+            hideBusy();
+            clearInput(`recovery_${residentId}`);
+            applyAdminResponse(response, 'Recovery key cleared.');
+          })
+          .withFailureHandler(handleError)
+          .adminClearResidentRecoveryKey(state.adminToken, residentId);
+      }
+
+      async function cancelResidentReservations(residentId) {
+        const sure = await askConfirm(
+          'Cancel open reservations?',
+          'All open reservations for this resident will be cancelled immediately.',
+          'Cancel reservations',
+          'btn-danger'
+        );
+        if (!sure) return;
+
+        showBusy('Cancelling reservations…', 'Removing open reservations.');
+
+        google.script.run
+          .withSuccessHandler((response) => {
+            hideBusy();
+            applyAdminResponse(response, 'Open reservations cancelled.');
+          })
+          .withFailureHandler(handleError)
+          .adminCancelResidentReservations(state.adminToken, residentId);
+      }
+
+      async function deactivateResident(residentId) {
+        const sure = await askConfirm(
+          'Deactivate account?',
+          'The resident will be signed out effectively because the access code will be cleared. Open reservations will also be cancelled.',
+          'Deactivate',
+          'btn-danger'
+        );
+        if (!sure) return;
+
+        showBusy('Deactivating account…', 'Disabling the resident account.');
+
+        google.script.run
+          .withSuccessHandler((response) => {
+            hideBusy();
+            applyAdminResponse(response, 'Resident deactivated.');
+          })
+          .withFailureHandler(handleError)
+          .adminSetResidentActive(state.adminToken, residentId, false);
+      }
+
+      async function reactivateResident(residentId) {
+        const sure = await askConfirm(
+          'Reactivate account?',
+          'A new access code will be generated for this resident immediately.',
+          'Reactivate',
+          'btn-ok'
+        );
+        if (!sure) return;
+
+        showBusy('Reactivating account…', 'Generating a new access code.');
+
+        google.script.run
+          .withSuccessHandler((response) => {
+            hideBusy();
+            applyAdminResponse(response, 'Resident reactivated.');
+          })
+          .withFailureHandler(handleError)
+          .adminSetResidentActive(state.adminToken, residentId, true);
+      }
+
+      async function deleteResident(residentId) {
+        const sure = await askConfirm(
+          'Delete resident permanently?',
+          'This removes the resident from the live Residents sheet. Open reservations will be cancelled first. Use this only when you really want permanent removal.',
+          'Delete permanently',
+          'btn-danger'
+        );
+        if (!sure) return;
+
+        showBusy('Deleting resident…', 'Removing the resident account permanently.');
+
+        google.script.run
+          .withSuccessHandler((response) => {
+            hideBusy();
+            applyAdminResponse(response, 'Resident deleted permanently.');
+          })
+          .withFailureHandler(handleError)
+          .adminDeleteResident(state.adminToken, residentId);
+      }
+
+      function getInputValue(id) {
+        const el = document.getElementById(id);
+        return el ? el.value.trim() : '';
+      }
+
+      function clearInput(id) {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+      }
+
+      function formatDateTime(value) {
+        if (!value) return '';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        return date.toLocaleString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+      }
+
+      function escapeHtml(value) {
+        return String(value == null ? '' : value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      function escapeAttr(value) {
+        return escapeHtml(value);
+      }
+
+      function escapeJs(value) {
+        return String(value == null ? '' : value)
+          .replace(/\\/g, '\\\\')
+          .replace(/'/g, "\\'");
+      }
+
+      function normalizeAdminSearchText(value) {
+        return String(value || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')   // remove accents/diacritics
+          .replace(/ß/g, 'ss')
+          .replace(/æ/g, 'ae')
+          .replace(/Æ/g, 'ae')
+          .replace(/œ/g, 'oe')
+          .replace(/Œ/g, 'oe')
+          .replace(/đ/g, 'd')
+          .replace(/Đ/g, 'd')
+          .replace(/ł/g, 'l')
+          .replace(/Ł/g, 'l')
+          .toLowerCase()
+          .trim();
+      }
+    </script>
+  </body>
+</html>

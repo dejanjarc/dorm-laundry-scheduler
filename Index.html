@@ -1,0 +1,3274 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dorm 14 Laundry Scheduler</title>
+    <style>
+      #footer {
+        width: 100%;
+        text-align: center;
+        font-size: clamp(0.3rem, 0.74rem + 0.25vw, 0.8rem)
+      }
+      :root {
+        --bg: #f5f7fb;
+        --card: #ffffff;
+        --text: #0f2340;
+        --muted: #55657f;
+        --accent: #2f6fed;
+        --border: #d9e2f0;
+        --ok: #18794e;
+        --ok-bg: #eaf8ef;
+        --danger: #b42318;
+        --danger-bg: #fff1f1;
+        --warn: #9a6700;
+        --warn-bg: #fff8e6;
+        --info-bg: #eef4ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, Arial, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        font-size: clamp(1rem, 0.94rem + 0.35vw, 1.1875rem);
+      }
+      .wrap {
+        width: min(1280px, 100%);
+        margin: 0 auto;
+        padding: 12px;
+      }
+      .stack { display: grid; gap: 16px; }
+      .hidden { display: none !important; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        box-shadow: 0 8px 24px rgba(10, 30, 60, 0.06);
+        padding: 20px;
+      }
+      .hero {
+        padding: 26px 24px;
+      }
+      .hero h1 {
+        margin: 0 0 8px;
+        font-size: 30px;
+      }
+      .hero p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+      .tabbar {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .tabbar button {
+        flex: 1 1 150px;
+      }
+      .tab-active {
+        background: var(--accent) !important;
+        color: #fff !important;
+      }
+      .section-title {
+        margin: 0 0 10px;
+        font-size: 20px;
+      }
+      .helper {
+        font-size: 13px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+      .auth-shell {
+        width: min(720px, 100%);
+        margin: 0 auto;
+      }
+      .auth-panel {
+        display: grid;
+        gap: 10px;
+        margin-top: 16px;
+      }
+      label {
+        font-size: 14px;
+        font-weight: 600;
+      }
+      input {
+        width: 100%;
+        padding: 13px 14px;
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        font-size: 16px;
+      }
+      input:focus {
+        outline: 2px solid rgba(47, 111, 237, 0.18);
+        border-color: var(--accent);
+      }
+      button {
+        border: 0;
+        border-radius: 12px;
+        padding: 12px 15px;
+        cursor: pointer;
+        font-size: 15px;
+        transition: transform 0.08s ease, opacity 0.15s ease, background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+        touch-action: manipulation;
+      }
+      button:hover { transform: translateY(-1px); }
+      button:disabled { opacity: 0.6; cursor: default; transform: none; }
+      .btn-primary { background: var(--accent); color: #fff; }
+      .btn-secondary { background: #eef3ff; color: var(--accent); }
+      .btn-muted { background: #eef2f7; color: var(--muted); }
+      .btn-danger { background: #fff1f1; color: var(--danger); }
+      .btn-ghost { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+      .copy-btn {
+        position: relative;
+        overflow: hidden;
+      }
+      .copy-btn:hover {
+        box-shadow: 0 8px 18px rgba(47, 111, 237, 0.16);
+      }
+      .copy-btn.copied {
+        background: var(--ok);
+        color: #fff;
+        box-shadow: 0 10px 22px rgba(24, 121, 78, 0.22);
+      }
+      .status {
+        min-height: 22px;
+        font-size: 14px;
+        color: var(--muted);
+      }
+      .status.error { color: var(--danger); }
+      .status.ok { color: var(--ok); }
+      .banner {
+        position: fixed;
+        left: 50%;
+        bottom: max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px));
+        z-index: 9000;
+        width: min(420px, calc(100vw - 24px));
+        pointer-events: none;
+        opacity: 0;
+        transform: translate(-50%, 16px);
+        transition: opacity 0.22s ease, transform 0.22s ease;
+      }
+      .banner.show {
+        opacity: 1;
+        transform: translate(-50%, 0);
+      }
+      .banner-body {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        border: 1px solid var(--border);
+        background: rgba(255, 255, 255, 0.98);
+        box-shadow: 0 14px 30px rgba(10, 30, 60, 0.16);
+        backdrop-filter: blur(10px);
+      }
+      .banner-message {
+        min-width: 0;
+        font-size: 14px;
+        font-weight: 700;
+        line-height: 1.35;
+      }
+      .banner-progress {
+        flex: 0 0 auto;
+        width: 24px;
+        height: 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .banner-progress svg {
+        width: 24px;
+        height: 24px;
+        display: block;
+        transform: rotate(-90deg);
+      }
+      .banner-progress-track {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 3;
+        opacity: 0.18;
+      }
+      .banner-progress-indicator {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-dasharray: 62.83;
+        stroke-dashoffset: 0;
+      }
+      .banner.info .banner-body { background: rgba(238, 244, 255, 0.98); color: var(--accent); border-color: #cfe0ff; }
+      .banner.ok .banner-body { background: rgba(234, 248, 239, 0.98); color: var(--ok); border-color: #ccebd8; }
+      .banner.warn .banner-body { background: rgba(255, 248, 230, 0.98); color: var(--warn); border-color: #f0ddb2; }
+      .banner.error .banner-body { background: rgba(255, 241, 241, 0.98); color: var(--danger); border-color: #f0c9c9; }
+      @keyframes banner-progress-countdown {
+        from { stroke-dashoffset: 0; }
+        to { stroke-dashoffset: 62.83; }
+      }
+      .dashboard-bar {
+        position: sticky;
+        top: 12px;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .dashboard-bar h1 {
+        margin: 0 0 6px;
+        font-size: 28px;
+      }
+      .dashboard-bar p {
+        margin: 0;
+        color: var(--muted);
+      }
+      .actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: minmax(0, 360px) minmax(0, 1fr);
+        gap: 16px;
+        align-items: start;
+      }
+      .cycle-status-card {
+        padding: 14px 16px;
+      }
+      .cycle-status-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .cycle-status-item {
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #fbfdff;
+        display: grid;
+        gap: 4px;
+      }
+      .cycle-status-item strong {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .cycle-status-value {
+        font-size: clamp(1rem, 0.95rem + 0.35vw, 1.18rem);
+        font-weight: 700;
+        line-height: 1.3;
+      }
+      .countdown-live {
+        color: var(--accent);
+        font-weight: 700;
+      }
+      .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+      }
+      .meta-item {
+        padding: 12px 14px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #fbfdff;
+      }
+      .meta-item strong {
+        display: block;
+        font-size: 13px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+
+      .access-card {
+        padding: 0;
+        overflow: hidden;
+      }
+      .access-summary {
+        list-style: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.875rem;
+        padding: 1rem 1.125rem;
+      }
+      .access-summary::-webkit-details-marker { display: none; }
+      .access-summary-main {
+        display: grid;
+        gap: 0.2rem;
+        min-width: 0;
+      }
+      .access-summary-title {
+        margin: 0;
+        font-size: clamp(1rem, 0.92rem + 0.35vw, 1.25rem);
+        font-weight: 700;
+      }
+      .access-summary .helper {
+        font-size: 0.9rem;
+      }
+      .access-summary-icon {
+        font-size: 1.15rem;
+        line-height: 1;
+        color: var(--muted);
+        transition: transform 0.18s ease;
+      }
+      .access-card[open] .access-summary-icon {
+        transform: rotate(90deg);
+      }
+      .access-body {
+        display: grid;
+        gap: 1rem;
+        padding: 0 1.125rem 1.125rem;
+        border-top: 1px solid var(--border);
+      }
+
+      .reservation-list { display: grid; gap: 12px; }
+      .inline-details {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: #fbfdff;
+        overflow: hidden;
+      }
+      .inline-summary {
+        list-style: none;
+        cursor: pointer;
+        padding: 12px 14px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .inline-summary::-webkit-details-marker { display: none; }
+      .inline-summary span:last-child {
+        color: var(--muted);
+        transition: transform 0.18s ease;
+      }
+      .inline-details[open] .inline-summary span:last-child {
+        transform: rotate(90deg);
+      }
+      .inline-details-body {
+        padding: 0 14px 14px;
+        display: grid;
+        gap: 10px;
+        border-top: 1px solid var(--border);
+      }
+      .reservation-item {
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 12px;
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .day-grid { display: grid; gap: 14px; }
+      .day-card {
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        background: white;
+        overflow: hidden;
+      }
+      .day-card[open] { box-shadow: 0 6px 20px rgba(10, 30, 60, 0.06); }
+      .day-head {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 14px 16px;
+        background: #76AEEB;
+        color: #ffffff;
+        cursor: pointer;
+        user-select: none;
+      }
+      .day-head::-webkit-details-marker { display: none; }
+      .day-head h3 { margin: 0; font-size: 18px; }
+      .day-head .helper { color: rgba(255,255,255,0.92); }
+      .day-head-right {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: rgba(255,255,255,0.96);
+        font-size: 13px;
+      }
+      .day-count {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 6px 11px;
+        background: rgba(255,255,255,0.18);
+        color: #ffffff;
+        white-space: nowrap;
+        font-weight: 700;
+      }
+      .day-count.avail-high { background: rgba(100, 180, 0, 0.5); }
+      .day-count.avail-mid { background: rgba(188, 226, 19, 0.5); }
+      .day-count.avail-low { background: rgba(227, 202, 13, 0.5); }
+      .day-count.avail-none { background: rgba(221, 32, 19, 0.5); }
+      .chevron { font-size: 18px; line-height: 1; transition: transform 0.18s ease; }
+      .day-card[open] .chevron { transform: rotate(90deg); }
+      .slot-list { display: grid; border-top: 1px solid var(--border); }
+      .slot-row {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        display: grid;
+        gap: 8px;
+      }
+      .slot-row:last-child { border-bottom: 0; }
+      .slot-top {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+      }
+
+      .slot-row.slot-upcoming-mine,
+      .reservation-item.slot-upcoming-mine {
+        background: #f2f7ff;
+        border-color: #b8cff5;
+        box-shadow: inset 4px 0 0 #2f6fed;
+      }
+
+      .slot-row.slot-running,
+      .reservation-item.slot-running {
+        background: #fff8e6;
+        border-color: #ead08a;
+        box-shadow: inset 4px 0 0 #c58b00;
+      }
+
+      .slot-row.slot-running-locked,
+      .reservation-item.slot-running-locked {
+        background: #f4f1ff;
+        border-color: #cfc3f2;
+        box-shadow: inset 4px 0 0 #6d5bd0;
+      }
+
+      .slot-row.slot-full,
+      .reservation-item.slot-full {
+        background: #f3f4f6;
+        border-color: #d1d5db;
+        box-shadow: inset 4px 0 0 #6b7280;
+      }
+
+      .slot-row.slot-upcoming-mine .helper,
+      .reservation-item.slot-upcoming-mine .helper,
+      .slot-row.slot-upcoming-mine strong,
+      .reservation-item.slot-upcoming-mine strong,
+      .slot-row.slot-running .helper,
+      .reservation-item.slot-running .helper,
+      .slot-row.slot-running strong,
+      .reservation-item.slot-running strong,
+      .slot-row.slot-running-locked .helper,
+      .reservation-item.slot-running-locked .helper,
+      .slot-row.slot-running-locked strong,
+      .reservation-item.slot-running-locked strong {
+        color: var(--text);
+      }
+
+      .slot-row.slot-full .helper,
+      .reservation-item.slot-full .helper,
+      .slot-row.slot-full strong,
+      .reservation-item.slot-full strong {
+        color: var(--text);
+      }
+
+
+      .slot-row.slot-full .slot-live-note,
+      .reservation-item.slot-full .slot-live-note {
+        color: #4b5563;
+      }
+
+      .slot-row.slot-full button:disabled,
+      .slot-row.slot-full .btn-primary:disabled,
+      .slot-row.slot-full .btn-secondary:disabled,
+      .reservation-item.slot-full button:disabled {
+        background: #e5e7eb;
+        color: #4b5563;
+        border: 1px solid #cbd5e1;
+        opacity: 1;
+        cursor: not-allowed;
+      }
+
+      .slot-row.slot-upcoming-mine .pill.mine,
+      .reservation-item.slot-upcoming-mine .pill.mine {
+        background: #dce9ff;
+        color: #1d4ed8;
+        border: 1px solid #b8cff5;
+        font-weight: 700;
+      }
+
+      .slot-row.slot-running .pill.mine,
+      .reservation-item.slot-running .pill.mine {
+        background: #f5dfb6;
+        color: #704400;
+        border: 1px solid #e0bc7a;
+        font-weight: 700;
+      }
+
+      .slot-row.slot-running-locked .pill.mine,
+      .reservation-item.slot-running-locked .pill.mine {
+        background: #e7e1fb;
+        color: #5b4db2;
+        border: 1px solid #cfc3f2;
+        font-weight: 700;
+      }
+
+      .slot-live-note {
+        font-size: 13px;
+        font-weight: 700;
+      }
+
+      .slot-live-note.upcoming {
+        color: #1d4ed8;
+      }
+
+      .slot-live-note.running {
+        color: #9a6700;
+      }
+
+      .slot-live-note.locked {
+        color: #5b4db2;
+      }
+
+      .pill {
+        display: inline-block;
+        border-radius: 999px;
+        padding: 5px 10px;
+        font-size: 12px;
+        background: #eef3ff;
+        color: var(--accent);
+      }
+      .pill.full {
+        background: #e5e7eb;
+        color: #374151;
+        border: 1px solid #cbd5e1;
+        font-weight: 700;
+      }
+      .pill.mine { background: #e8f7ee; color: var(--ok); }
+      .overlay, .confirm-overlay, .code-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(14, 24, 38, 0.42);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        z-index: 9999;
+      }
+      .overlay.show, .confirm-overlay.show, .code-overlay.show { display: flex; }
+      .overlay-card, .confirm-card, .code-card {
+        width: min(500px, 100%);
+        background: #ffffff;
+        border-radius: 20px;
+        padding: 24px;
+        box-shadow: 0 18px 45px rgba(10, 30, 60, 0.22);
+        border: 1px solid rgba(255,255,255,0.9);
+      }
+      .overlay-card { text-align: center; }
+      .spinner {
+        width: 44px;
+        height: 44px;
+        margin: 0 auto 16px;
+        border: 4px solid #d8e5ff;
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.85s linear infinite;
+      }
+      .overlay-title, .confirm-title, .code-title { margin: 0 0 8px; font-size: 21px; }
+      .overlay-text, .confirm-text, .code-text { margin: 0; color: var(--muted); font-size: 15px; line-height: 1.45; }
+      .confirm-text, .code-text { margin-bottom: 18px; }
+      .confirm-actions, .code-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+      .code-box {
+        margin: 16px 0 18px;
+        padding: 18px 14px;
+        text-align: center;
+        border-radius: 16px;
+        background: #f5f8ff;
+        border: 1px dashed #bcd0ff;
+        font-size: 30px;
+        font-weight: 800;
+        letter-spacing: 2px;
+        color: var(--accent);
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+
+      html { -webkit-text-size-adjust: 100%; }
+      body { min-height: 100vh; padding-bottom: env(safe-area-inset-bottom, 0px); }
+      button, input { min-height: 48px; }
+      .actions > button { min-height: 46px; }
+      @media (max-width: 980px) {
+        .wrap {
+          width: 100%;
+          padding: 10px;
+        }
+        .grid-2 { grid-template-columns: 1fr; }
+        #sideStack {
+          display: grid;
+          gap: 16px;
+        }
+        #reservationsCard { order: 1; }
+        #accessCard { order: 2; }
+        #scheduleCard { order: 3; }
+        .dashboard-bar {
+          position: sticky;
+          top: max(0px, env(safe-area-inset-top, 0px));
+          padding: 14px;
+          border-radius: 16px;
+          background: rgba(255, 255, 255, 0.96);
+          backdrop-filter: blur(8px);
+          box-shadow: 0 10px 28px rgba(10, 30, 60, 0.10);
+        }
+        .dashboard-bar > div:first-child { width: 100%; }
+        .dashboard-bar .actions {
+          width: 100%;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .dashboard-bar .actions button { width: 100%; }
+        .auth-shell { width: 100%; }
+      }
+      @media (max-width: 680px) {
+        body { font-size: 19px; }
+        .wrap {
+          width: 100%;
+          padding: 10px;
+        }
+        .stack { gap: 14px; }
+        .card {
+          padding: 18px;
+          border-radius: 18px;
+        }
+        .hero { padding: 20px 18px; }
+        .hero h1 { font-size: 28px; line-height: 1.15; }
+        .section-title { font-size: 22px; }
+        .dashboard-bar h1 { font-size: 26px; }
+        .dashboard-bar p { font-size: 16px; }
+        .tabbar {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+        .tabbar button {
+          width: 100%;
+          flex: 1 1 auto;
+        }
+        .cycle-status-grid { grid-template-columns: 1fr; }
+        .meta-grid { grid-template-columns: 1fr; }
+        .reservation-item {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .reservation-item .actions,
+        .slot-row .actions,
+        .inline-details-body .actions {
+          width: 100%;
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+        .day-head {
+          padding: 15px 16px;
+          align-items: flex-start;
+        }
+        .day-head-right {
+          align-self: center;
+          margin-left: auto;
+        }
+        .slot-row { padding: 17px 16px; }
+        .slot-top {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 8px;
+        }
+        .slot-row strong { font-size: 20px; }
+        .day-head h3 { font-size: 22px; }
+        .helper { font-size: 15px; line-height: 1.55; }
+        label { font-size: 15px; }
+        button, input { font-size: 18px; min-height: 56px; }
+        input { padding: 15px 16px; }
+        .actions { gap: 10px; }
+        .confirm-actions,
+        .code-actions {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+        .overlay-card,
+        .confirm-card,
+        .code-card {
+          padding: 20px 18px;
+          border-radius: 18px;
+        }
+        .code-box {
+          font-size: 24px;
+          letter-spacing: 1.5px;
+          word-break: break-word;
+        }
+      }
+      @media (max-width: 480px) {
+        body { font-size: 20px; }
+        .wrap { padding: 8px; }
+        .card {
+          padding: 18px 16px;
+          border-radius: 16px;
+        }
+        .hero {
+          padding: 20px 16px;
+        }
+        .hero h1 { font-size: 30px; }
+        .hero p,
+        .dashboard-bar p,
+        .helper { font-size: 16px; }
+        .section-title { font-size: 23px; }
+        .dashboard-bar {
+          padding: 14px 12px;
+          gap: 12px;
+        }
+        .dashboard-bar h1 { font-size: 27px; }
+        .dashboard-bar .actions { grid-template-columns: 1fr; }
+        .dashboard-bar .actions button { min-height: 58px; }
+        .meta-item,
+        .reservation-item,
+        .inline-summary,
+        .inline-details-body { font-size: 17px; }
+        .meta-item { padding: 15px; }
+        .meta-item strong { font-size: 14px; }
+        .day-head {
+          flex-direction: column;
+          align-items: stretch;
+          padding: 16px 15px;
+        }
+        .day-head-right {
+          width: 100%;
+          justify-content: space-between;
+          margin-left: 0;
+        }
+        .day-head h3 { font-size: 23px; }
+        .day-count {
+          font-size: 14px;
+          padding: 7px 12px;
+        }
+        .slot-row {
+          padding: 18px 15px;
+          gap: 10px;
+        }
+        .slot-row strong { font-size: 21px; }
+        .pill { font-size: 13px; padding: 6px 11px; }
+        label { font-size: 15px; }
+        button, input {
+          font-size: 18px;
+          min-height: 58px;
+        }
+        input { padding: 16px; }
+        .overlay-card, .confirm-card, .code-card {
+          width: min(100%, 420px);
+        }
+      }
+      @media (max-width: 390px) {
+        body { font-size: 20px; }
+        .wrap { padding: 6px; }
+        .card {
+          padding: 16px 14px;
+          border-radius: 15px;
+        }
+        .hero h1 { font-size: 28px; }
+        .section-title { font-size: 22px; }
+        .dashboard-bar h1 { font-size: 25px; }
+        .meta-item,
+        .reservation-item,
+        .inline-summary,
+        .inline-details-body { font-size: 16px; }
+        .helper,
+        .hero p,
+        .dashboard-bar p { font-size: 15px; }
+        .day-head h3 { font-size: 21px; }
+        .slot-row strong { font-size: 19px; }
+        button, input {
+          font-size: 17px;
+          min-height: 56px;
+        }
+        .code-box {
+          font-size: 22px;
+          padding: 16px 12px;
+        }
+      }
+      @media (max-width: 360px) {
+        .wrap { padding: 4px; }
+        .card { padding: 15px 12px; }
+        .hero { padding: 18px 14px; }
+        .hero h1 { font-size: 26px; }
+        .dashboard-bar h1 { font-size: 24px; }
+        .day-head { padding: 14px 12px; }
+        .slot-row { padding: 16px 12px; }
+        .day-head h3 { font-size: 20px; }
+        .day-count { font-size: 13px; }
+        .helper,
+        .hero p,
+        .dashboard-bar p { font-size: 14px; }
+        .overlay-card, .confirm-card, .code-card {
+          padding: 16px 14px;
+          width: min(100%, 340px);
+        }
+      }
+
+
+      /* Stronger phone-first scaling for narrow screens */
+      .meta-item,
+      .reservation-item,
+      .slot-row,
+      .helper,
+      .code-box,
+      .overlay-text,
+      .confirm-text,
+      .code-text {
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+
+      @media (max-width: 430px) {
+        body {
+          font-size: 19px;
+          line-height: 1.45;
+        }
+        .wrap {
+          width: 100%;
+          max-width: 100%;
+          padding: 12px;
+        }
+        .stack { gap: 16px; }
+        .card {
+          padding: 20px 18px;
+          border-radius: 20px;
+        }
+        .hero {
+          padding: 22px 18px;
+        }
+        .hero h1 {
+          font-size: 31px;
+          line-height: 1.1;
+          letter-spacing: -0.02em;
+        }
+        .hero p,
+        .dashboard-bar p,
+        .helper,
+        .status,
+        label {
+          font-size: 15px;
+        }
+        .dashboard-bar {
+          position: sticky;
+          top: max(0px, env(safe-area-inset-top, 0px));
+          padding: 16px;
+          gap: 14px;
+        }
+        .dashboard-bar h1 {
+          font-size: 28px;
+          line-height: 1.1;
+        }
+        .section-title {
+          font-size: 24px;
+          line-height: 1.15;
+        }
+        input,
+        button {
+          min-height: 56px;
+          font-size: 18px;
+          padding: 15px 16px;
+          border-radius: 14px;
+        }
+        .tabbar {
+          gap: 10px;
+        }
+        .inline-summary {
+          padding: 16px;
+          font-size: 17px;
+        }
+        .inline-details-body {
+          padding: 0 16px 16px;
+          gap: 12px;
+        }
+        .meta-item {
+          padding: 16px;
+          border-radius: 16px;
+          font-size: 18px;
+          line-height: 1.35;
+        }
+        .meta-item strong {
+          font-size: 14px;
+          margin-bottom: 6px;
+        }
+        .reservation-item {
+          padding: 16px;
+          border-radius: 16px;
+        }
+        .day-grid {
+          gap: 16px;
+        }
+        .day-card {
+          border-radius: 20px;
+        }
+        .day-head {
+          padding: 16px;
+          gap: 14px;
+        }
+        .day-head h3 {
+          font-size: 22px;
+          line-height: 1.1;
+        }
+        .day-head .helper {
+          font-size: 15px;
+          line-height: 1.35;
+        }
+        .day-head-right {
+          gap: 12px;
+          font-size: 14px;
+        }
+        .day-count {
+          padding: 7px 12px;
+          font-size: 13px;
+        }
+        .chevron {
+          font-size: 22px;
+        }
+        .slot-row {
+          padding: 18px 16px;
+          gap: 10px;
+        }
+        .slot-row strong {
+          font-size: 20px;
+          line-height: 1.2;
+        }
+        .slot-row .helper {
+          font-size: 15px;
+          line-height: 1.45;
+        }
+        .pill {
+          font-size: 13px;
+          padding: 6px 11px;
+        }
+        .banner {
+          width: min(420px, calc(100vw - 20px));
+          bottom: max(14px, calc(env(safe-area-inset-bottom, 0px) + 10px));
+        }
+        .banner-body {
+          padding: 13px 14px;
+          border-radius: 18px;
+        }
+        .banner-message {
+          font-size: 14px;
+        }
+        .overlay-card,
+        .confirm-card,
+        .code-card {
+          width: min(100%, 420px);
+          padding: 22px 18px;
+          border-radius: 18px;
+        }
+        .overlay-title,
+        .confirm-title,
+        .code-title {
+          font-size: 24px;
+          line-height: 1.15;
+        }
+        .overlay-text,
+        .confirm-text,
+        .code-text {
+          font-size: 16px;
+          line-height: 1.45;
+        }
+        .code-box {
+          font-size: 28px;
+          padding: 20px 14px;
+          border-radius: 18px;
+        }
+      }
+
+      @media (max-width: 430px) {
+        body {
+          font-size: 20px;
+        }
+        .wrap {
+          padding: 10px;
+        }
+        .card {
+          padding: 18px 16px;
+          border-radius: 18px;
+        }
+        .hero {
+          padding: 20px 16px;
+        }
+        .hero h1 {
+          font-size: 30px;
+        }
+        .dashboard-bar h1 {
+          font-size: 27px;
+        }
+        .section-title {
+          font-size: 23px;
+        }
+        .dashboard-bar .actions {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .dashboard-bar .actions button {
+          min-height: 56px;
+        }
+        .day-head {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .day-head-right {
+          width: 100%;
+          justify-content: space-between;
+          margin-left: 0;
+        }
+        .slot-top {
+          align-items: flex-start;
+        }
+        .slot-row strong {
+          font-size: 21px;
+        }
+        .meta-item,
+        .reservation-item {
+          font-size: 18px;
+        }
+      }
+
+      @media (max-width: 390px) {
+        .wrap {
+          padding: 8px;
+        }
+        .hero h1 {
+          font-size: 28px;
+        }
+        .dashboard-bar h1 {
+          font-size: 25px;
+        }
+        .section-title {
+          font-size: 22px;
+        }
+        input,
+        button {
+          min-height: 58px;
+          font-size: 18px;
+        }
+        .day-head h3 {
+          font-size: 21px;
+        }
+        .day-head .helper,
+        .slot-row .helper,
+        .helper,
+        label {
+          font-size: 14px;
+        }
+        .code-box {
+          font-size: 25px;
+          letter-spacing: 1px;
+        }
+      }
+
+      @media (max-width: 360px) {
+        body {
+          font-size: 20px;
+        }
+        .wrap {
+          padding: 6px;
+        }
+        .card {
+          padding: 16px 14px;
+        }
+        .hero h1 {
+          font-size: 26px;
+        }
+        .dashboard-bar h1 {
+          font-size: 24px;
+        }
+        .day-head {
+          padding: 14px;
+        }
+        .slot-row {
+          padding: 16px 14px;
+        }
+        .slot-row strong {
+          font-size: 20px;
+        }
+        .meta-item {
+          padding: 14px;
+        }
+        .overlay-card,
+        .confirm-card,
+        .code-card {
+          padding: 18px 14px;
+        }
+      }
+
+
+      @media (max-width: 430px) {
+        .access-summary {
+          padding: 0.95rem 1rem;
+        }
+        .access-body {
+          padding: 0 1rem 1rem;
+        }
+      }
+
+      @media (max-width: 360px) {
+        .access-summary {
+          padding: 0.9rem;
+        }
+        .access-body {
+          padding: 0 0.9rem 0.9rem;
+        }
+      }
+
+      .notice-critical .confirm-card {
+        border: 2px solid #d92d20;
+        box-shadow: 0 22px 54px rgba(185, 28, 28, 0.28);
+        background: linear-gradient(180deg, #fff6f6 0%, #ffffff 100%);
+      }
+
+      .notice-critical .confirm-title {
+        color: #b42318;
+      }
+
+      .notice-critical .confirm-text {
+        color: #6b1f17;
+      }
+
+      .notice-critical #noticeOkBtn {
+        background: #d92d20;
+        color: #ffffff;
+      }
+
+      .notice-info .confirm-card {
+        border: 2px solid #2f6fed;
+        box-shadow: 0 18px 44px rgba(47, 111, 237, 0.18);
+        background: linear-gradient(180deg, #f5f9ff 0%, #ffffff 100%);
+      }
+      
+      .dashboard-bar {
+        position: static;
+        top: auto;
+        z-index: auto;
+      }
+
+      .dashboard-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-left: auto;
+      }
+
+      .dashboard-actions .btn-toolbar {
+        min-height: 38px;
+        padding: 8px 12px;
+        font-size: 14px;
+        line-height: 1;
+        border-radius: 999px;
+        white-space: nowrap;
+        box-shadow: none;
+      }
+
+      .dashboard-actions .btn-toolbar:hover {
+        transform: none;
+      }
+
+      .dashboard-actions .btn-secondary.btn-toolbar {
+        background: #f3f6fc;
+        color: #4e5f79;
+        border: 1px solid var(--border);
+      }
+
+      .dashboard-actions .btn-muted.btn-toolbar {
+        background: #f7f9fc;
+        color: #617086;
+        border: 1px solid var(--border);
+      }
+
+      .dashboard-actions .btn-secondary.btn-toolbar:hover,
+      .dashboard-actions .btn-muted.btn-toolbar:hover {
+        background: #eef3ff;
+        color: var(--accent);
+      }
+
+      .help-card {
+        width: min(560px, 100%);
+        max-height: min(84vh, 760px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+
+      .help-body {
+        text-align: left;
+        display: grid;
+        gap: 10px;
+        overflow-y: auto;
+        padding-right: 4px;
+        margin-bottom: 0;
+      }
+
+      .help-actions {
+        margin-top: 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+        background: #fff;
+        position: sticky;
+        bottom: 0;
+      }
+
+      @media (max-width: 680px) {
+        .dashboard-actions {
+          width: 100%;
+          justify-content: flex-start;
+          margin-left: 0;
+        }
+
+        .dashboard-actions .btn-toolbar {
+          min-height: 36px;
+          padding: 8px 11px;
+          font-size: 14px;
+        }
+
+        .schedule-refresh-bar {
+          top: 8px;
+          margin-bottom: 8px;
+        }
+
+        .btn-refresh-sticky {
+          width: 100%;
+          min-height: 42px;
+          font-size: 15px;
+        }
+
+        .help-card {
+          width: min(100%, 520px);
+          max-height: min(88vh, 760px);
+        }
+
+        #helpOverlay {
+          align-items: flex-start;
+          padding-top: max(16px, env(safe-area-inset-top, 0px));
+          padding-bottom: 16px;
+        }
+      }
+
+      @media (max-width: 430px) {
+        .dashboard-actions .btn-toolbar {
+          min-height: 34px;
+          padding: 7px 10px;
+          font-size: 13px;
+        }
+
+        .btn-refresh-sticky {
+          min-height: 40px;
+          font-size: 14px;
+          padding: 9px 12px;
+        }
+
+        .help-card {
+          max-height: calc(100vh - 20px);
+          border-radius: 16px;
+        }
+
+        .help-body {
+          font-size: 15px;
+          line-height: 1.45;
+        }
+      }
+
+      @media (max-width: 680px) {
+      .dashboard-actions {
+        width: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 6px;
+        margin-left: auto;
+      }
+
+      .dashboard-actions .btn-toolbar {
+        width: 108px;
+        min-height: 36px;
+        padding: 8px 10px;
+        font-size: 14px;
+        justify-content: center;
+        text-align: center;
+      }
+    }
+
+    .schedule-refresh-bar {
+      position: sticky;
+      top: 10px;
+      z-index: 12;
+      display: flex;
+      justify-content: flex-end;
+      margin: 4px 0 12px;
+      pointer-events: none;
+    }
+
+    .schedule-refresh-shell {
+      pointer-events: auto;
+      display: inline-flex;
+      align-items: center;
+      padding: 8px;
+      border-radius: 18px;
+      border: 1px solid rgba(217, 226, 240, 0.98);
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 12px 28px rgba(10, 30, 60, 0.14);
+      backdrop-filter: blur(8px);
+      transform-origin: top right;
+      transition:
+        background-color 0.10s ease,
+        border-color 0.10s ease,
+        box-shadow 0.10s ease,
+        opacity 0.10s ease,
+        transform 0.10s ease;
+    }
+
+    .btn-refresh-sticky {
+      min-height: 46px;
+      padding: 11px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 14px;
+      box-shadow: 0 8px 18px rgba(47, 111, 237, 0.18);
+      transition:
+        opacity 0.22s ease,
+        box-shadow 0.22s ease,
+        filter 0.22s ease,
+        transform 0.22s ease;
+    }
+
+    body.refresh-floating.refresh-scrolling .schedule-refresh-shell {
+      background: rgba(255, 255, 255, 0.54);
+      border-color: rgba(217, 226, 240, 0.56);
+      box-shadow: 0 5px 14px rgba(10, 30, 60, 0.07);
+      transform: scale(0.88);
+    }
+
+    body.refresh-floating.refresh-scrolling .btn-refresh-sticky {
+      opacity: 0.66;
+      box-shadow: 0 3px 8px rgba(47, 111, 237, 0.08);
+      filter: saturate(0.82);
+      transform: scale(0.93);
+    }
+
+    body:not(.refresh-floating.refresh-scrolling) .btn-refresh-sticky:hover {
+      transform: translateY(-1px);
+    }
+
+    @media (max-width: 680px) {
+      .schedule-refresh-bar {
+        top: 8px;
+        margin: 4px 0 10px;
+      }
+
+      .schedule-refresh-shell {
+        padding: 6px;
+        border-radius: 16px;
+        transform-origin: top center;
+      }
+    }
+
+    @media (max-width: 430px) {
+      .schedule-refresh-bar {
+        justify-content: center;
+      }
+
+      .btn-refresh-sticky {
+        min-height: 40px;
+        padding: 9px 13px;
+        font-size: 14px;
+      }
+    }
+
+    select {
+      width: 100%;
+      padding: 13px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 16px;
+      background: #fff;
+      color: var(--text);
+    }
+
+    select:focus {
+      outline: 2px solid rgba(47, 111, 237, 0.18);
+      border-color: var(--accent);
+    }
+
+    </style>
+  </head>
+  <body>
+    <div class="overlay" id="busyOverlay" aria-live="polite" aria-busy="true">
+      <div class="overlay-card">
+        <div class="spinner"></div>
+        <h2 class="overlay-title" id="busyTitle">Working…</h2>
+        <p class="overlay-text" id="busyText">Please wait while the laundry board updates.</p>
+      </div>
+    </div>
+
+    <div class="confirm-overlay" id="confirmOverlay" aria-live="polite" aria-modal="true" role="dialog">
+      <div class="confirm-card">
+        <h2 class="confirm-title" id="confirmTitle">Please confirm</h2>
+        <p class="confirm-text" id="confirmText">Are you sure you want to continue?</p>
+        <div class="confirm-actions">
+          <button class="btn-muted" id="confirmCancelBtn">Go back</button>
+          <button class="btn-danger" id="confirmOkBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="confirm-overlay" id="machineOverlay" aria-live="polite" aria-modal="true" role="dialog">
+      <div class="confirm-card">
+        <h2 class="confirm-title" id="machineTitle">Change machine</h2>
+        <p class="confirm-text" id="machineText">Select another free machine for this slot.</p>
+        <label for="machineSelect">Available machines</label>
+        <select id="machineSelect"></select>
+        <div class="confirm-actions">
+          <button class="btn-muted" id="machineCancelBtn">Go back</button>
+          <button class="btn-secondary" id="machineOkBtn">Change machine</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="code-overlay" id="codeOverlay" aria-live="polite" aria-modal="true" role="dialog">
+      <div class="code-card">
+        <h2 class="code-title" id="codeTitle">Your access code</h2>
+        <p class="code-text" id="codeText">Save this code now. You can use your recovery key to reset it later.</p>
+        <div class="code-box" id="codeValue">ABC123</div>
+        <div class="code-actions">
+          <button class="btn-secondary copy-btn" id="copyCodeBtn">Copy code</button>
+          <button class="btn-primary" id="closeCodeBtn">Continue</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="confirm-overlay" id="noticeOverlay" aria-live="polite" aria-modal="true" role="dialog">
+      <div class="confirm-card">
+        <h2 class="confirm-title" id="noticeTitle">Action could not be completed</h2>
+        <p class="confirm-text" id="noticeText">Please try again.</p>
+        <div class="confirm-actions">
+          <button class="btn-primary" id="noticeOkBtn">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="confirm-overlay" id="helpOverlay" aria-live="polite" aria-modal="true" role="dialog">
+      <div class="confirm-card help-card">
+        <h2 class="confirm-title">Help</h2>
+        <div class="confirm-text help-body">
+          <div><strong>How the scheduler works</strong></div>
+          <div>• You may hold <b>one</b> laundry reservation <b>per week</b>.</div>
+          <div>• You can move or cancel your reservation <b>only until one hour after the slot starts</b>.</div>
+          <div>• If you want to <b>switch the machine</b>, you can do that once <b>your slot starts running</b>.</div>
+          <div>• After the next cycle opens, <b>refresh the slots</b> to see the new schedule.</div>
+          <div>• If you forget your access code, use your <b>recovery key</b> to reset it.</div>
+          <div style="margin-top:8px;"><strong>If something goes wrong</strong></div>
+          <div>• If a slot appears available but fails to claim, <b>refresh the slots</b> and try again.</div>
+          <div>• If the scheduler is <b>busy</b> and cannot complete your action, <b>refresh the slots</b> and try again.</div>
+          <div>• If your reservation becomes locked, the <b>move/cancel decision time window has passed</b>.</div>
+          <div>• If sign-in fails, double-check your room number and access code.</div>
+          <div>• If you keep having issues, contact the dorm representative.</div>
+        </div>
+        <div class="confirm-actions help-actions">
+          <button class="btn-primary" id="helpCloseBtn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="wrap stack">
+      <div class="banner" id="banner" role="status" aria-live="polite" aria-atomic="true">
+        <div class="banner-body">
+          <span class="banner-message" id="bannerMessage"></span>
+          <span class="banner-progress" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <circle class="banner-progress-track" cx="12" cy="12" r="10"></circle>
+              <circle class="banner-progress-indicator" id="bannerProgressIndicator" cx="12" cy="12" r="10"></circle>
+            </svg>
+          </span>
+        </div>
+      </div>
+
+      <section id="authView" class="stack">
+        <div class="card hero">
+          <h1>Dorm 14 Laundry Scheduler</h1>
+          <p>Welcome to the Laundry Scheduler of Dorm 14!</p>
+          <br>
+          <p >You can use this web app to reserve and track your laundry slots.</p>
+          <br>
+          <p class="helper"><i>This is still a prototype, so if you want to rate the app or have any suggestions, please fill in <a href="https://forms.gle/aErkUB4GteUnMHhm6">this form</a>!</i></p>
+        </div>
+
+        <div class="card auth-shell">
+          <div class="tabbar">
+            <button id="tabLogin" class="btn-secondary tab-active" onclick="switchAuthTab('login')">Sign in</button>
+            <button id="tabSignup" class="btn-secondary" onclick="switchAuthTab('signup')">Create new account</button>
+            <button id="tabReset" class="btn-secondary" onclick="switchAuthTab('reset')">Reset code</button>
+            <button id="tabInstructions" class="btn-secondary" onclick="switchAuthTab('instructions')">Instructions</button>
+          </div>
+
+          <div id="loginPanel" class="auth-panel">
+            <h2 class="section-title">Sign in</h2>
+            <p class="helper">Use your room number and access code to open your laundry dashboard.</p>
+            <label for="loginRoomInput">Room number</label>
+            <input id="loginRoomInput" type="text" placeholder="Example: 101 or P01">
+            <label for="loginCodeInput">Access code</label>
+            <input id="loginCodeInput" type="text" placeholder="Example: A7K9P2" maxlength="12">
+            <div class="actions">
+              <button class="btn-primary" onclick="login()">Sign in</button>
+            </div>
+          </div>
+
+          <div id="signupPanel" class="auth-panel hidden">
+            <h2 class="section-title">Create a new account</h2>
+            <p class="helper">You get a resident access code when you register. You use the access code to sign in. Choose a recovery key that you will remember. You can use it later to reset your access code if necessary.</p>
+            <label for="signupRoomInput">Room number</label>
+            <p class="helper">
+              Make sure your room number is correct. If you move to another room, update it later in Account info.
+            </p>
+            <input id="signupRoomInput" type="text" placeholder="Example: 101 or P01">
+            <label for="signupNameInput">Full name</label>
+            <input id="signupNameInput" type="text" placeholder="Example: Janez Novak">
+            <label for="signupRecoveryInput">Recovery key</label>
+            <p class="helper"><i>Choose a recovery key or phrase. You use this to reset your access code and get a new one.</i></p>
+            <input id="signupRecoveryInput" type="password" placeholder="Your key here">
+            <label for="signupRecoveryConfirmInput">Confirm recovery key</label>
+            <p class="helper"><i>Repeat the same recovery key or phrase from before.</i></p>
+            <input id="signupRecoveryConfirmInput" type="password" placeholder="Repeat same key here">
+            <div class="actions">
+              <button class="btn-primary" onclick="signUp()">Create my code</button>
+            </div>
+          </div>
+
+          <div id="resetPanel" class="auth-panel hidden">
+            <h2 class="section-title">Reset a forgotten code</h2>
+            <p class="helper">Enter the same room, name, and recovery key you used when registering your account. A new access code will be generated. You can use the new one to sign in.</p>
+            <p class="helper"><i>WARNING: Old access code will NOT work anymore after this!</i></p>
+            <label for="resetRoomInput">Room number</label>
+            <input id="resetRoomInput" type="text" placeholder="Example: 101 or P01">
+            <label for="resetNameInput">Full name</label>
+            <input id="resetNameInput" type="text" placeholder="Example: Janez Novak">
+            <label for="resetRecoveryInput">Recovery key</label>
+            <input id="resetRecoveryInput" type="password" placeholder="Your recovery word or phrase">
+            <div class="actions">
+              <button class="btn-primary" onclick="resetCode()">Reset my code</button>
+            </div>
+          </div>
+
+          <div id="instructionsPanel" class="auth-panel hidden">
+            <h2 class="section-title">How it works</h2>
+            <div class="helper" style="display:grid; gap:10px;">
+              <div><strong>How the scheduler works</strong></div>
+              <div>• You may hold <b>one</b> laundry reservation <b>per week</b>.</div>
+              <div>• You can move or cancel your reservation <b>only until one hour after the slot starts</b>.</div>
+              <div>• If you want to <b>switch the machine</b>, you can do that once <b>your slot starts running</b>.</div>
+              <div>• After the next cycle opens, <b>refresh the slots</b> to see the new schedule.</div>
+              <div>• If you forget your access code, use your <b>recovery key</b> to reset it.</div>
+              <div>• If you move to another room, update your room number in <b>Account info</b>.</div>
+              <div>• If you move out permanently, please <b>delete your account</b> yourself so new residents can register for your room.</div>
+              <div style="margin-top:8px;"><strong>If something goes wrong</strong></div>
+              <div>• If a slot appears available but fails to claim, <b>refresh the slots</b> and try again.</div>
+              <div>• If the scheduler is <b>busy</b> and cannot complete your action, <b>refresh the slots</b> and try again.</div>
+              <div>• If your reservation becomes locked, the <b>move/cancel decision time window has passed</b>.</div>
+              <div>• If sign-in fails, double-check your room number and access code.</div>
+              <div>• Inactive accounts may later be disabled automatically. If your account was disabled, contact the dorm representative.</div>
+              <div>• If you keep having issues or something else went wrong, contact the dorm representative.</div>
+            </div>
+          </div>
+
+          <div class="status" id="authStatus"></div>
+        </div>
+      </section>
+
+      <section id="dashboardView" class="stack hidden">
+        
+        <div class="card dashboard-bar">
+          <div>
+            <h1>My laundry dashboard</h1>
+            <p id="dashboardSubtitle">Signed in.</p>
+          </div>
+          <div class="actions dashboard-actions" id="dashboardActions">
+            <button class="btn-secondary btn-toolbar" onclick="openDashboardHelp()">Help</button>
+            <button class="btn-muted btn-toolbar" onclick="logout()">Log out</button>
+          </div>
+        </div>
+
+        <div class="card cycle-status-card">
+          <div class="cycle-status-grid">
+            <div class="cycle-status-item">
+              <strong>Current cycle</strong>
+              <div class="cycle-status-value" id="currentCycleLabel">—</div>
+            </div>
+            <div class="cycle-status-item">
+              <strong>Next cycle claiming opens</strong>
+              <div class="cycle-status-value" id="nextCycleOpenLabel">—</div>
+              <div class="helper countdown-live" id="nextCycleCountdown">—</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="stack" id="sideStack">
+            <details class="card access-card" id="accessCard">
+              <summary class="access-summary">
+                <div class="access-summary-main">
+                  <div class="access-summary-title">Your access</div>
+                  <div class="helper">Expand to see your access settings.</div>
+                </div>
+                <span class="access-summary-icon">›</span>
+              </summary>
+              <div class="access-body">
+                <div class="meta-grid" id="metaGrid"></div>
+
+                <details class="inline-details" id="profileDetails">
+                  <summary class="inline-summary">
+                    <span>Account info</span>
+                    <span>›</span>
+                  </summary>
+                  <div class="inline-details-body">
+                    <label for="profileNameInput">Full name</label>
+                    <input id="profileNameInput" type="text" placeholder="Your full name">
+
+                    <label for="profileRoomInput">Room number</label>
+                    <input id="profileRoomInput" type="text" placeholder="Example: 101 or P01">
+
+                    <div class="actions">
+                      <button class="btn-secondary" onclick="saveProfile()">Save account info</button>
+                      <button class="btn-danger" onclick="deleteAccount()">Delete account</button>
+                    </div>
+                  </div>
+                </details>
+
+                <details class="inline-details" id="recoveryDetails">
+                  <summary class="inline-summary">
+                    <span>Recovery key settings</span>
+                    <span>›</span>
+                  </summary>
+                  <div class="inline-details-body">
+                    <p class="helper" id="recoveryHelper">Set a recovery key so you can reset a forgotten access code yourself.</p>
+                    <label for="dashboardRecoveryInput">New recovery key</label>
+                    <input id="dashboardRecoveryInput" type="password" placeholder="Choose a recovery word or phrase">
+                    <label for="dashboardRecoveryConfirmInput">Confirm recovery key</label>
+                    <input id="dashboardRecoveryConfirmInput" type="password" placeholder="Repeat the same recovery key">
+                    <div class="actions">
+                      <button class="btn-secondary" onclick="saveRecoveryKey()">Save recovery key</button>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            </details>
+
+            <div class="card stack" id="reservationsCard">
+              <div>
+                <h2 class="section-title">Your current reservations</h2>
+                <p class="helper">You can cancel your slot or move it into another free slot of the same week. Each reservation is assigned a machine number automatically.</p>
+              </div>
+              <div class="reservation-list" id="reservationList"></div>
+            </div>
+          </div>
+
+          <div class="card stack" id="scheduleCard">
+            <div class="schedule-head">
+              <div>
+                <h2 class="section-title">Available slots</h2>
+                <p class="helper" id="scheduleHelper">Loading active cycle…</p>
+              </div>
+            </div>
+
+            <div class="schedule-refresh-bar">
+              <div class="schedule-refresh-shell">
+                <button class="btn-primary btn-refresh-sticky" id="refreshDashboardBtn" onclick="refreshDashboard()">↻ Refresh slots</button>
+              </div>
+            </div>
+
+            <div class="day-grid" id="dayGrid"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script>
+      let state = { auth: null, dashboard: null, activeTab: 'login' };
+      const DISPLAY_LOCALE = 'en-US';
+      let countdownTimer = null;
+      let countdownServerBaseMs = null;
+      let countdownPerfBaseMs = null;
+      let liveSlotTimer = null;
+      let refreshScrollTimer = null;
+      let bannerTimer = null;
+      let bannerAnimationResetTimer = null;
+      const REFRESH_COOLDOWN_MS = 15000;
+      const RETRYABLE_ERROR_TOKEN = '[RETRYABLE]';
+      const LOGIN_RETRY_MAX_ATTEMPTS = 3;
+      const REFRESH_RETRY_MAX_ATTEMPTS = 4;
+      const ACTION_RETRY_MAX_ATTEMPTS = 4;
+      let refreshRequestInFlight = false;
+      let refreshCooldownUntilMs = 0;
+      let refreshCooldownTimer = null;
+      let pendingMachineReservationId = null;
+
+      const STORAGE_KEYS = {
+        auth: 'dormLaundryAuth',
+        dashboard: 'dormLaundryDashboard',
+        refreshCooldownUntil: 'dormLaundryRefreshCooldownUntil',
+      };
+
+      const els = {
+        authView: document.getElementById('authView'),
+        dashboardView: document.getElementById('dashboardView'),
+        tabLogin: document.getElementById('tabLogin'),
+        tabSignup: document.getElementById('tabSignup'),
+        tabReset: document.getElementById('tabReset'),
+        tabInstructions: document.getElementById('tabInstructions'),
+        loginPanel: document.getElementById('loginPanel'),
+        signupPanel: document.getElementById('signupPanel'),
+        resetPanel: document.getElementById('resetPanel'),
+        instructionsPanel: document.getElementById('instructionsPanel'),
+        loginRoomInput: document.getElementById('loginRoomInput'),
+        loginCodeInput: document.getElementById('loginCodeInput'),
+        signupRoomInput: document.getElementById('signupRoomInput'),
+        signupNameInput: document.getElementById('signupNameInput'),
+        signupRecoveryInput: document.getElementById('signupRecoveryInput'),
+        signupRecoveryConfirmInput: document.getElementById('signupRecoveryConfirmInput'),
+        resetRoomInput: document.getElementById('resetRoomInput'),
+        resetNameInput: document.getElementById('resetNameInput'),
+        resetRecoveryInput: document.getElementById('resetRecoveryInput'),
+        authStatus: document.getElementById('authStatus'),
+        banner: document.getElementById('banner'),
+        bannerMessage: document.getElementById('bannerMessage'),
+        bannerProgressIndicator: document.getElementById('bannerProgressIndicator'),
+        dashboardSubtitle: document.getElementById('dashboardSubtitle'),
+        dashboardActions: document.getElementById('dashboardActions'),
+        currentCycleLabel: document.getElementById('currentCycleLabel'),
+        nextCycleOpenLabel: document.getElementById('nextCycleOpenLabel'),
+        nextCycleCountdown: document.getElementById('nextCycleCountdown'),
+        metaGrid: document.getElementById('metaGrid'),
+        dashboardRecoveryInput: document.getElementById('dashboardRecoveryInput'),
+        dashboardRecoveryConfirmInput: document.getElementById('dashboardRecoveryConfirmInput'),
+        recoveryHelper: document.getElementById('recoveryHelper'),
+        accessCard: document.getElementById('accessCard'),
+        recoveryDetails: document.getElementById('recoveryDetails'),
+        reservationList: document.getElementById('reservationList'),
+        dayGrid: document.getElementById('dayGrid'),
+        scheduleHelper: document.getElementById('scheduleHelper'),
+        busyOverlay: document.getElementById('busyOverlay'),
+        busyTitle: document.getElementById('busyTitle'),
+        busyText: document.getElementById('busyText'),
+        confirmOverlay: document.getElementById('confirmOverlay'),
+        confirmTitle: document.getElementById('confirmTitle'),
+        confirmText: document.getElementById('confirmText'),
+        confirmOkBtn: document.getElementById('confirmOkBtn'),
+        confirmCancelBtn: document.getElementById('confirmCancelBtn'),
+        codeOverlay: document.getElementById('codeOverlay'),
+        codeTitle: document.getElementById('codeTitle'),
+        codeText: document.getElementById('codeText'),
+        codeValue: document.getElementById('codeValue'),
+        copyCodeBtn: document.getElementById('copyCodeBtn'),
+        closeCodeBtn: document.getElementById('closeCodeBtn'),
+        noticeOverlay: document.getElementById('noticeOverlay'),
+        noticeTitle: document.getElementById('noticeTitle'),
+        noticeText: document.getElementById('noticeText'),
+        noticeOkBtn: document.getElementById('noticeOkBtn'),
+        helpOverlay: document.getElementById('helpOverlay'),
+        helpCloseBtn: document.getElementById('helpCloseBtn'),
+        scheduleRefreshBar: document.querySelector('.schedule-refresh-bar'),
+        refreshDashboardBtn: document.getElementById('refreshDashboardBtn'),
+        machineOverlay: document.getElementById('machineOverlay'),
+        machineTitle: document.getElementById('machineTitle'),
+        machineText: document.getElementById('machineText'),
+        machineSelect: document.getElementById('machineSelect'),
+        machineCancelBtn: document.getElementById('machineCancelBtn'),
+        machineOkBtn: document.getElementById('machineOkBtn'),
+        profileDetails: document.getElementById('profileDetails'),
+        profileNameInput: document.getElementById('profileNameInput'),
+        profileRoomInput: document.getElementById('profileRoomInput'),
+        
+      };
+
+      const actionConfig = {
+        claimSlot: {
+          busyTitle: 'Claiming slot…',
+          busyText: 'Checking capacity and saving your reservation now.',
+          success: 'Slot claimed successfully.'
+        },
+        cancelReservation: {
+          busyTitle: 'Cancelling reservation…',
+          busyText: 'Removing your reservation and refreshing the board.',
+          success: 'Reservation cancelled.'
+        },
+        moveReservation: {
+          busyTitle: 'Moving reservation…',
+          busyText: 'Saving your move and refreshing available slots.',
+          success: 'Reservation moved successfully.'
+        },
+        saveRecoveryKey: {
+          busyTitle: 'Saving recovery key…',
+          busyText: 'Updating your recovery key for future self-service resets.',
+          success: 'Recovery key saved.'
+        },
+        changeReservationMachine: {
+          busyTitle: 'Changing machine…',
+          busyText: 'Saving your new machine and refreshing the board.',
+          success: 'Machine changed successfully.'
+        },
+        updateMyProfile: {
+          busyTitle: 'Saving account info…',
+          busyText: 'Updating your account details and refreshing the board.',
+          success: 'Account info updated successfully.'
+        },
+      };
+
+      init();
+
+      function init() {
+        switchAuthTab('login');
+        if (els.accessCard) els.accessCard.open = false;
+        if (els.recoveryDetails) els.recoveryDetails.open = false;
+        bindRefreshScrollEffect();
+
+        const savedAuth = localStorage.getItem(STORAGE_KEYS.auth);
+        const savedDashboard = sessionStorage.getItem(STORAGE_KEYS.dashboard);
+        const savedCooldownUntil = Number(sessionStorage.getItem(STORAGE_KEYS.refreshCooldownUntil) || 0);
+
+        if (savedCooldownUntil > Date.now()) {
+          refreshCooldownUntilMs = savedCooldownUntil;
+        } else {
+          refreshCooldownUntilMs = 0;
+          sessionStorage.removeItem(STORAGE_KEYS.refreshCooldownUntil);
+        }
+
+        updateRefreshButtonState();
+        ensureRefreshCooldownTicker();
+
+        if (!savedAuth) return;
+
+        try {
+          state.auth = JSON.parse(savedAuth);
+          els.loginRoomInput.value = state.auth.room || '';
+          els.loginCodeInput.value = state.auth.accessCode || '';
+
+          if (savedDashboard) {
+            try {
+              state.dashboard = JSON.parse(savedDashboard);
+            } catch (err) {
+              state.dashboard = null;
+            }
+          }
+
+          if (state.dashboard) {
+            renderDashboard();
+            showDashboardView();
+          }
+
+          if (refreshCooldownUntilMs > Date.now()) {
+            showBanner(
+              `Using saved data. Refresh available in ${Math.ceil((refreshCooldownUntilMs - Date.now()) / 1000)}s.`,
+              'info',
+              2500
+            );
+            return;
+          }
+
+          refreshDashboard({ force: true });
+        } catch (err) {
+          clearPersistedClientState();
+          state.auth = null;
+          state.dashboard = null;
+        }
+      }
+
+      function switchAuthTab(tab) {
+        state.activeTab = tab;
+        const mapping = {
+          login: [els.loginPanel, els.tabLogin],
+          signup: [els.signupPanel, els.tabSignup],
+          reset: [els.resetPanel, els.tabReset],
+          instructions: [els.instructionsPanel, els.tabInstructions],
+        };
+        Object.entries(mapping).forEach(([key, [panel, button]]) => {
+          const active = key === tab;
+          panel.classList.toggle('hidden', !active);
+          button.classList.toggle('tab-active', active);
+        });
+        setAuthStatus('');
+      }
+
+      function setAuthStatus(message, type = '') {
+        els.authStatus.textContent = message || '';
+        els.authStatus.className = 'status' + (type ? ' ' + type : '');
+      }
+
+      function showBanner(message, type = 'info', timeoutMs = 5000) {
+        if (bannerTimer) {
+          window.clearTimeout(bannerTimer);
+          bannerTimer = null;
+        }
+        if (bannerAnimationResetTimer) {
+          window.clearTimeout(bannerAnimationResetTimer);
+          bannerAnimationResetTimer = null;
+        }
+
+        if (!message) {
+          clearBanner();
+          return;
+        }
+
+        els.bannerMessage.textContent = message;
+        els.banner.className = 'banner ' + type;
+
+        const indicator = els.bannerProgressIndicator;
+        indicator.style.animation = 'none';
+        indicator.style.strokeDashoffset = '0';
+
+        void indicator.getBoundingClientRect();
+        els.banner.classList.add('show');
+
+        if (timeoutMs > 0) {
+          indicator.style.animation = `banner-progress-countdown ${timeoutMs}ms linear forwards`;
+          bannerTimer = window.setTimeout(() => {
+            clearBanner();
+          }, timeoutMs);
+        }
+      }
+
+      function clearBanner() {
+        if (bannerTimer) {
+          window.clearTimeout(bannerTimer);
+          bannerTimer = null;
+        }
+        if (bannerAnimationResetTimer) {
+          window.clearTimeout(bannerAnimationResetTimer);
+          bannerAnimationResetTimer = null;
+        }
+
+        const indicator = els.bannerProgressIndicator;
+        if (indicator) {
+          indicator.style.animation = 'none';
+          indicator.style.strokeDashoffset = '62.83';
+        }
+
+        els.banner.className = 'banner';
+        bannerAnimationResetTimer = window.setTimeout(() => {
+          els.bannerMessage.textContent = '';
+          if (indicator) {
+            indicator.style.strokeDashoffset = '0';
+          }
+          bannerAnimationResetTimer = null;
+        }, 220);
+      }
+
+      function getRefreshCooldownRemainingMs() {
+        return Math.max(0, refreshCooldownUntilMs - Date.now());
+      }
+
+      function stopRefreshCooldownTicker() {
+        if (refreshCooldownTimer) {
+          window.clearInterval(refreshCooldownTimer);
+          refreshCooldownTimer = null;
+        }
+      }
+
+      function updateRefreshButtonState() {
+        const btn = els.refreshDashboardBtn;
+        if (!btn) return;
+
+        const remainingMs = getRefreshCooldownRemainingMs();
+        const remainingSeconds = Math.ceil(remainingMs / 1000);
+        const coolingDown = remainingMs > 0;
+
+        btn.disabled = refreshRequestInFlight || coolingDown;
+        btn.textContent = coolingDown
+          ? `↻ Refresh in ${remainingSeconds}s`
+          : '↻ Refresh slots';
+
+        if (!coolingDown) {
+          stopRefreshCooldownTicker();
+        }
+      }
+
+      function startRefreshCooldown(durationMs = REFRESH_COOLDOWN_MS) {
+        refreshCooldownUntilMs = Date.now() + Math.max(0, durationMs);
+        persistClientState();
+        updateRefreshButtonState();
+        ensureRefreshCooldownTicker();
+      }
+
+      function setRefreshRequestInFlight(isInFlight) {
+        refreshRequestInFlight = Boolean(isInFlight);
+        updateRefreshButtonState();
+      }
+
+      function ensureRefreshCooldownTicker() {
+        stopRefreshCooldownTicker();
+
+        if (getRefreshCooldownRemainingMs() <= 0) {
+          refreshCooldownUntilMs = 0;
+          sessionStorage.removeItem(STORAGE_KEYS.refreshCooldownUntil);
+          updateRefreshButtonState();
+          return;
+        }
+
+        refreshCooldownTimer = window.setInterval(() => {
+          if (getRefreshCooldownRemainingMs() <= 0) {
+            refreshCooldownUntilMs = 0;
+            sessionStorage.removeItem(STORAGE_KEYS.refreshCooldownUntil);
+            stopRefreshCooldownTicker();
+          }
+          updateRefreshButtonState();
+        }, 250);
+      }
+
+      function getErrorMessage(error) {
+        if (!error) return 'Something went wrong.';
+        if (typeof error === 'string') return error;
+        if (error.message) return String(error.message);
+        return String(error);
+      }
+
+      function sanitizeServerMessage(message) {
+        return String(message || '')
+          .replace(RETRYABLE_ERROR_TOKEN, '')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+      }
+
+      function isRetryableServerMessage(message) {
+        const raw = String(message || '');
+        const clean = sanitizeServerMessage(raw);
+        return raw.includes(RETRYABLE_ERROR_TOKEN) ||
+          /please retry in a moment/i.test(clean) ||
+          /busy right now/i.test(clean) ||
+          /opening right now/i.test(clean) ||
+          /too many residents are changing reservations/i.test(clean) ||
+          /too many scripts running simultaneously/i.test(clean) ||
+          /service invoked too many times/i.test(clean) ||
+          /there are too many scripts running simultaneously/i.test(clean);
+      }
+
+      function getRetryDelayMs(attemptNumber, options = {}) {
+        const baseDelayMs = Math.max(250, Number(options.baseDelayMs) || 700);
+        const maxDelayMs = Math.max(baseDelayMs, Number(options.maxDelayMs) || 4000);
+        const exponential = Math.min(maxDelayMs, Math.round(baseDelayMs * Math.pow(1.75, Math.max(0, attemptNumber - 1))));
+        const jitter = Math.floor(Math.random() * Math.min(700, Math.max(120, Math.round(exponential * 0.45))));
+        return Math.min(maxDelayMs, exponential + jitter);
+      }
+
+      function callServerWithRetry(methodName, args, options = {}) {
+        const retry = Object.assign({
+          maxAttempts: 0,
+          baseDelayMs: 700,
+          maxDelayMs: 4000,
+          initialJitterMaxMs: 0,
+          onRetry: null,
+        }, options.retry || {});
+
+        return new Promise((resolve, reject) => {
+          const invoke = (attemptNumber) => {
+            google.script.run
+              .withSuccessHandler(resolve)
+              .withFailureHandler((error) => {
+                const rawMessage = getErrorMessage(error);
+                const cleanMessage = sanitizeServerMessage(rawMessage) || 'Something went wrong.';
+                const retryable = isRetryableServerMessage(rawMessage);
+
+                if (retryable && attemptNumber < retry.maxAttempts) {
+                  const nextAttemptNumber = attemptNumber + 1;
+                  const delayMs = getRetryDelayMs(nextAttemptNumber, retry);
+                  if (typeof retry.onRetry === 'function') {
+                    retry.onRetry({
+                      methodName,
+                      attemptNumber: nextAttemptNumber,
+                      delayMs,
+                      message: cleanMessage,
+                    });
+                  }
+                  window.setTimeout(() => invoke(nextAttemptNumber), delayMs);
+                  return;
+                }
+
+                reject({ message: cleanMessage });
+              })[methodName](...args);
+          };
+
+          const initialDelayMs = retry.initialJitterMaxMs > 0
+            ? Math.floor(Math.random() * (retry.initialJitterMaxMs + 1))
+            : 0;
+
+          if (initialDelayMs > 0) {
+            window.setTimeout(() => invoke(0), initialDelayMs);
+          } else {
+            invoke(0);
+          }
+        });
+      }
+
+      function showBusy(title = 'Working…', text = 'Please wait while the laundry board updates.') {
+        els.busyTitle.textContent = title;
+        els.busyText.textContent = text;
+        els.busyOverlay.classList.add('show');
+        document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+      }
+
+      function hideBusy() {
+        els.busyOverlay.classList.remove('show');
+        document.querySelectorAll('button').forEach(btn => btn.disabled = false);
+        updateRefreshButtonState();
+      }
+
+      async function askConfirm(title, text, confirmLabel = 'Confirm', confirmClass = 'btn-danger') {
+        return new Promise((resolve) => {
+          els.confirmTitle.textContent = title;
+          els.confirmText.innerHTML = text;
+          els.confirmOkBtn.textContent = confirmLabel;
+          els.confirmOkBtn.className = confirmClass;
+          els.confirmOverlay.classList.add('show');
+
+          const cleanup = (result) => {
+            els.confirmOverlay.classList.remove('show');
+            els.confirmOkBtn.onclick = null;
+            els.confirmCancelBtn.onclick = null;
+            resolve(result);
+          };
+
+          els.confirmOkBtn.onclick = () => cleanup(true);
+          els.confirmCancelBtn.onclick = () => cleanup(false);
+        });
+      }
+
+      function resetCopyButtonState() {
+        els.copyCodeBtn.textContent = 'Copy code';
+        els.copyCodeBtn.classList.remove('copied');
+        els.copyCodeBtn.disabled = false;
+      }
+
+      function flashCopyButtonSuccess() {
+        els.copyCodeBtn.textContent = 'Copied ✓';
+        els.copyCodeBtn.classList.add('copied');
+        els.copyCodeBtn.disabled = true;
+        window.setTimeout(() => {
+          resetCopyButtonState();
+        }, 1400);
+      }
+
+      function showCodeModal(title, text, code) {
+        els.codeTitle.textContent = title;
+        els.codeText.textContent = text;
+        els.codeValue.textContent = code || '—';
+        resetCopyButtonState();
+        els.codeOverlay.classList.add('show');
+        els.copyCodeBtn.onclick = async () => {
+          try {
+            await navigator.clipboard.writeText(code || '');
+            flashCopyButtonSuccess();
+            showBanner('Access code copied.', 'ok');
+          } catch (err) {
+            els.copyCodeBtn.textContent = 'Copy failed';
+            els.copyCodeBtn.classList.remove('copied');
+            showBanner('Could not copy automatically. Please copy the code manually.', 'warn');
+            window.setTimeout(() => resetCopyButtonState(), 1400);
+          }
+        };
+        els.closeCodeBtn.onclick = () => {
+          els.codeOverlay.classList.remove('show');
+          resetCopyButtonState();
+          els.copyCodeBtn.onclick = null;
+          els.closeCodeBtn.onclick = null;
+        };
+      }
+
+      function showAuthView() {
+        els.authView.classList.remove('hidden');
+        els.dashboardView.classList.add('hidden');
+      }
+
+      function showDashboardView() {
+        els.authView.classList.add('hidden');
+        els.dashboardView.classList.remove('hidden');
+      }
+
+      async function login() {
+        const room = els.loginRoomInput.value.trim();
+        const accessCode = els.loginCodeInput.value.trim().toUpperCase();
+        clearBanner();
+        setAuthStatus('Signing in…');
+        showBusy('Signing in…', 'Loading your reservations and the active 2-week cycle.');
+
+        try {
+          const dashboard = await callServerWithRetry('loginResident', [room, accessCode], {
+            retry: {
+              maxAttempts: LOGIN_RETRY_MAX_ATTEMPTS,
+              baseDelayMs: 800,
+              maxDelayMs: 3500,
+              onRetry: ({ attemptNumber, delayMs }) => {
+                const seconds = (delayMs / 1000).toFixed(delayMs >= 1000 ? 1 : 0);
+                els.busyText.textContent = `The scheduler is busy right now. Retrying sign in automatically (${attemptNumber}/${LOGIN_RETRY_MAX_ATTEMPTS}) in about ${seconds}s…`;
+                showBanner(`Scheduler busy. Retrying sign in in about ${seconds}s…`, 'info', Math.max(1800, Math.min(delayMs + 300, 2600)));
+              },
+            },
+          });
+
+          hideBusy();
+          state.auth = dashboard.auth;
+          state.dashboard = dashboard;
+          persistClientState();
+          localStorage.setItem('dormLaundryAuth', JSON.stringify(state.auth));
+          renderDashboard();
+          showDashboardView();
+          setAuthStatus('Signed in.', 'ok');
+          showBanner('Signed in successfully.', 'ok');
+        } catch (error) {
+          handleError(error);
+        }
+      }
+
+      function signUp() {
+        const room = els.signupRoomInput.value.trim();
+        const displayName = els.signupNameInput.value.trim();
+        const recovery = els.signupRecoveryInput.value;
+        const recoveryConfirm = els.signupRecoveryConfirmInput.value;
+        if (recovery !== recoveryConfirm) {
+          showNotice('Sign up could not be completed', 'The recovery key fields do not match.');
+          return;
+        }
+        clearBanner();
+        setAuthStatus('Creating your access code…');
+        showBusy('Creating access code…', 'Saving your registration and preparing your dashboard.');
+        google.script.run
+          .withSuccessHandler((dashboard) => {
+            hideBusy();
+            state.auth = dashboard.auth;
+            state.dashboard = dashboard;
+            persistClientState();
+            localStorage.setItem('dormLaundryAuth', JSON.stringify(state.auth));
+            els.loginRoomInput.value = dashboard.auth.room || '';
+            els.loginCodeInput.value = dashboard.auth.accessCode || '';
+            renderDashboard();
+            showDashboardView();
+            showBanner('Registration complete. Your access code is ready.', 'ok');
+            showCodeModal('Your new access code', 'Save this code now. You can sign in with it later, and you can reset it anytime with your recovery key.', dashboard.signupResult && dashboard.signupResult.accessCode ? dashboard.signupResult.accessCode : dashboard.auth.accessCode);
+          })
+          .withFailureHandler(handleError)
+          .selfRegisterResident(room, displayName, recovery);
+      }
+
+      function resetCode() {
+        const room = els.resetRoomInput.value.trim();
+        const displayName = els.resetNameInput.value.trim();
+        const recovery = els.resetRecoveryInput.value;
+        clearBanner();
+        setAuthStatus('Resetting your access code…');
+        showBusy('Resetting access code…', 'Verifying your reset details and generating a fresh code.');
+        google.script.run
+          .withSuccessHandler((dashboard) => {
+            hideBusy();
+            state.auth = dashboard.auth;
+            state.dashboard = dashboard;
+            persistClientState();
+            localStorage.setItem('dormLaundryAuth', JSON.stringify(state.auth));
+            els.loginRoomInput.value = dashboard.auth.room || '';
+            els.loginCodeInput.value = dashboard.auth.accessCode || '';
+            renderDashboard();
+            showDashboardView();
+            showBanner('A new access code has been issued.', 'ok');
+            showCodeModal('Your new access code', 'Your old code has stopped working. Save this new code now.', dashboard.resetResult && dashboard.resetResult.accessCode ? dashboard.resetResult.accessCode : dashboard.auth.accessCode);
+          })
+          .withFailureHandler(handleError)
+          .selfResetAccessCode(room, displayName, recovery);
+      }
+
+      function saveRecoveryKey() {
+        if (!state.auth) return;
+        const recovery = els.dashboardRecoveryInput.value;
+        const confirm = els.dashboardRecoveryConfirmInput.value;
+
+        if (recovery !== confirm) {
+          showNotice('Recovery key could not be saved', 'The recovery key fields do not match.');
+          return;
+        }
+        if (!recovery || recovery.length < 4) {
+          showNotice('Recovery key could not be saved', 'Choose a recovery key with at least 4 characters.');
+          return;
+        }
+
+        act('saveRecoveryKey', recovery);
+        els.dashboardRecoveryInput.value = '';
+        els.dashboardRecoveryConfirmInput.value = '';
+      }
+
+      function saveProfile() {
+        if (!state.auth || !state.dashboard) return;
+
+        const newDisplayName = els.profileNameInput.value.trim();
+        const newRoom = els.profileRoomInput.value.trim().toUpperCase();
+
+        if (!newDisplayName) {
+          showNotice('Profile update could not be completed', 'Enter your full name.');
+          return;
+        }
+        if (!newRoom) {
+          showNotice('Profile update could not be completed', 'Enter your room number.');
+          return;
+        }
+
+        act('updateMyProfile', newDisplayName, newRoom);
+      }
+
+      async function deleteAccount() {
+        if (!state.auth) return;
+
+        const sure = await askConfirm(
+          'Delete account?',
+          'Your account will be deactivated. Future reservations will be cancelled automatically. This action happens immediately.',
+          'Delete account',
+          'btn-danger'
+        );
+
+        if (!sure) return;
+
+        clearBanner();
+        showBusy('Deleting account…', 'Cancelling future reservations and removing your access.');
+
+        google.script.run
+          .withSuccessHandler(() => {
+            hideBusy();
+            logout();
+            setAuthStatus('Your account has been deleted.', 'ok');
+          })
+          .withFailureHandler(handleError)
+          .deleteMyAccount(state.auth.room, state.auth.accessCode);
+      }
+      
+      function showNotice(title, text, options = {}) {
+        const { variant = 'critical', onClose = null } = options;
+
+        els.noticeTitle.textContent = title || 'Notice';
+        els.noticeText.textContent = text || '';
+
+        els.noticeOverlay.classList.remove('notice-critical', 'notice-info');
+        els.noticeOverlay.classList.add(variant === 'info' ? 'notice-info' : 'notice-critical');
+        els.noticeOverlay.classList.add('show');
+
+        els.noticeOkBtn.onclick = () => {
+          els.noticeOverlay.classList.remove('show');
+          els.noticeOkBtn.onclick = null;
+          if (typeof onClose === 'function') onClose();
+        };
+      }
+
+      async function refreshDashboard(options = {}) {
+        const { force = false } = options || {};
+        const auth = state.auth || {
+          room: els.loginRoomInput.value.trim(),
+          accessCode: els.loginCodeInput.value.trim().toUpperCase(),
+        };
+        if (!auth.room || !auth.accessCode) return;
+        if (!force) {
+          if (refreshRequestInFlight) return;
+          const remainingMs = getRefreshCooldownRemainingMs();
+          if (remainingMs > 0) {
+            showBanner(`Please wait ${Math.ceil(remainingMs / 1000)}s before refreshing again.`, 'info', 2200);
+            updateRefreshButtonState();
+            return;
+          }
+        }
+
+        setRefreshRequestInFlight(true);
+        clearBanner();
+        showBusy('Refreshing slots…', 'Loading your latest reservations and slot availability.');
+
+        try {
+          const dashboard = await callServerWithRetry('refreshDashboard', [auth.room, auth.accessCode], {
+            retry: {
+              maxAttempts: REFRESH_RETRY_MAX_ATTEMPTS,
+              baseDelayMs: 700,
+              maxDelayMs: 3000,
+              onRetry: ({ attemptNumber, delayMs }) => {
+                const seconds = (delayMs / 1000).toFixed(delayMs >= 1000 ? 1 : 0);
+                els.busyText.textContent = `The scheduler is busy right now. Retrying refresh automatically (${attemptNumber}/${REFRESH_RETRY_MAX_ATTEMPTS}) in about ${seconds}s…`;
+                showBanner(`Scheduler busy. Retrying refresh in about ${seconds}s…`, 'info', Math.max(1800, Math.min(delayMs + 300, 2600)));
+              },
+            },
+          });
+
+          hideBusy();
+          setRefreshRequestInFlight(false);
+          startRefreshCooldown();
+          state.auth = dashboard.auth;
+          state.dashboard = dashboard;
+          persistClientState();
+          localStorage.setItem('dormLaundryAuth', JSON.stringify(state.auth));
+          renderDashboard();
+          showDashboardView();
+          showBanner('Slots refreshed.', 'ok');
+        } catch (error) {
+          hideBusy();
+          setRefreshRequestInFlight(false);
+          startRefreshCooldown(5000);
+          handleError(error);
+        }
+      }
+
+      function openDashboardHelp() {
+        els.helpOverlay.classList.add('show');
+        els.helpCloseBtn.onclick = () => {
+          els.helpOverlay.classList.remove('show');
+          els.helpCloseBtn.onclick = null;
+        };
+      }
+
+      function logout() {
+        stopLiveSlotIndicatorTimer();
+        stopRefreshCooldownTicker();
+        refreshCooldownUntilMs = 0;
+        refreshRequestInFlight = false;
+        state = { auth: null, dashboard: null, activeTab: 'login' };
+        clearPersistedClientState();
+        clearBanner();
+        updateRefreshButtonState();
+        setAuthStatus('Logged out from this device.', 'ok');
+        showAuthView();
+        switchAuthTab('login');
+      }
+
+      function openAdminDashboard() {
+        clearBanner();
+        showBusy('Opening admin dashboard…', 'Switching to the admin page.');
+
+        google.script.run
+          .withSuccessHandler((url) => {
+            console.log('USER -> ADMIN target URL:', url);
+            window.top.location.href = url;
+          })
+          .withFailureHandler((error) => {
+            hideBusy();
+            showNotice(
+              'Navigation failed',
+              sanitizeServerMessage(getErrorMessage(error)) || 'Could not open the admin dashboard.'
+            );
+            console.error('USER -> ADMIN navigation failed', error);
+          })
+          .getAppPageUrl('admin');
+      }
+
+      async function act(actionName, ...args) {
+        if (!state.auth) return;
+        const cfg = actionConfig[actionName] || {
+          busyTitle: 'Saving…',
+          busyText: 'Updating your reservation and refreshing the board.',
+          success: 'Saved.'
+        };
+        const retryMaxAttempts = actionName === 'saveRecoveryKey' ? 2 : ACTION_RETRY_MAX_ATTEMPTS;
+        const initialJitterMaxMs = actionName === 'claimSlot' ? 350 : 180;
+
+        clearBanner();
+        showBusy(cfg.busyTitle, cfg.busyText);
+
+        try {
+          const dashboard = await callServerWithRetry(actionName, [state.auth.room, state.auth.accessCode, ...args], {
+            retry: {
+              maxAttempts: retryMaxAttempts,
+              baseDelayMs: actionName === 'saveRecoveryKey' ? 600 : 550,
+              maxDelayMs: actionName === 'saveRecoveryKey' ? 1800 : 2800,
+              initialJitterMaxMs,
+              onRetry: ({ attemptNumber, delayMs }) => {
+                const seconds = (delayMs / 1000).toFixed(delayMs >= 1000 ? 1 : 0);
+                els.busyText.textContent = `The scheduler is busy right now. Retrying automatically (${attemptNumber}/${retryMaxAttempts}) in about ${seconds}s…`;
+                showBanner(`Scheduler busy. Retrying in about ${seconds}s…`, 'info', Math.max(1600, Math.min(delayMs + 300, 2400)));
+              },
+            },
+          });
+
+          hideBusy();
+
+          if (dashboard && dashboard.auth) {
+            state.auth = dashboard.auth;
+            els.loginRoomInput.value = state.auth.room || '';
+            els.loginCodeInput.value = state.auth.accessCode || '';
+          }
+
+          state.dashboard = dashboard;
+          persistClientState();
+          renderDashboard();
+          showBanner(cfg.success, 'ok');
+        } catch (error) {
+          handleError(error);
+        }
+      }
+
+      async function claim(slotId) {
+      const data = state.dashboard;
+      if (!data || !data.groupedDays) {
+        act('claimSlot', slotId);
+        return;
+      }
+
+      const allSlots = [];
+      Object.values(data.groupedDays).forEach(slots => (slots || []).forEach(slot => allSlots.push(slot)));
+      const slot = allSlots.find(item => item.slotId === slotId);
+
+      if (slot && isSlotRunning(slot) && !isDecisionWindowOpen(slot)) {
+        const sure = await askConfirm(
+          'Final claim?',
+          'This slot is already past the first hour. If you claim it now, you will not be able to move or cancel it later.',
+          'Claim anyway',
+          'btn-danger'
+        );
+        if (!sure) return;
+      }
+
+      act('claimSlot', slotId);
+    }
+
+      async function cancelReservation(reservationId) {
+        const sure = await askConfirm(
+          'Cancel reservation?',
+          'This will remove your current slot and make it available to someone else.',
+          'Cancel reservation',
+          'btn-danger'
+        );
+        if (sure) act('cancelReservation', reservationId);
+      }
+
+      async function moveReservation(reservationId, newSlotId) {
+        const currentReservation = findReservationCardById(reservationId);
+        const targetSlot = findDashboardSlotById(newSlotId);
+
+        const fromText = escapeHtml(formatReservationForMovePrompt(currentReservation));
+        const toText = escapeHtml(formatSlotForMovePrompt(targetSlot));
+
+        const sure = await askConfirm(
+          'Move reservation?',
+          `You are replacing <strong>${fromText}</strong> with <strong>${toText}</strong>. This happens immediately.`,
+          'Move here',
+          'btn-secondary'
+        );
+
+        if (sure) act('moveReservation', reservationId, newSlotId);
+      }
+
+      function findReservationCardById(reservationId) {
+        return (state.dashboard && state.dashboard.reservationCards || []).find(
+          item => item.reservationId === reservationId
+        ) || null;
+      }
+
+      function openMachinePicker(reservationId) {
+        const item = findReservationCardById(reservationId);
+        if (!item || !item.availableMachineNos || !item.availableMachineNos.length) return;
+
+        pendingMachineReservationId = reservationId;
+
+        els.machineTitle.textContent = 'Change machine';
+        els.machineText.innerHTML =
+          `Your current machine is <strong>${escapeHtml(String(item.machineNo || '—'))}</strong> ` +
+          `for <strong>${escapeHtml(item.dayLabel)} · ${escapeHtml(item.slotLabel)}</strong>. ` +
+          `Select another free machine for the same slot.`;
+
+        els.machineSelect.innerHTML = item.availableMachineNos
+          .map(n => `<option value="${n}">Machine ${n}</option>`)
+          .join('');
+
+        els.machineOverlay.classList.add('show');
+
+        els.machineCancelBtn.onclick = closeMachinePicker;
+        els.machineOkBtn.onclick = confirmMachineChange;
+      }
+
+      function closeMachinePicker() {
+        els.machineOverlay.classList.remove('show');
+        els.machineCancelBtn.onclick = null;
+        els.machineOkBtn.onclick = null;
+        pendingMachineReservationId = null;
+      }
+
+      function confirmMachineChange() {
+        const reservationId = pendingMachineReservationId;
+        const newMachineNo = Number(els.machineSelect.value || 0);
+
+        closeMachinePicker();
+
+        if (!reservationId || !newMachineNo) return;
+        act('changeReservationMachine', reservationId, newMachineNo);
+      }
+
+      function syncAdminDashboardButton(isAdmin) {
+        if (!els.dashboardActions) return;
+
+        const existing = document.getElementById('adminDashboardBtn');
+
+        if (!isAdmin) {
+          if (existing) existing.remove();
+          return;
+        }
+
+        if (existing) return;
+
+        const helpButton = Array.from(els.dashboardActions.querySelectorAll('button'))
+          .find(btn => btn.textContent.trim() === 'Help');
+
+        const adminBtn = document.createElement('button');
+        adminBtn.id = 'adminDashboardBtn';
+        adminBtn.className = 'btn-secondary btn-toolbar';
+        adminBtn.textContent = 'Admin dashboard';
+        adminBtn.onclick = openAdminDashboard;
+
+        if (helpButton) {
+          els.dashboardActions.insertBefore(adminBtn, helpButton);
+        } else {
+          els.dashboardActions.prepend(adminBtn);
+        }
+      }
+
+      function renderDashboard() {
+        const data = state.dashboard;
+        if (!data) return;
+        const normalizedDays = normalizeDayGroups(data.groupedDays || {});
+        const cycleLabel = buildCycleLabel(normalizedDays, data.cycleStartText, data.cycleEndText);
+
+        els.dashboardSubtitle.textContent = `${data.resident.displayName} · room ${data.resident.room}`;
+
+        syncAdminDashboardButton(Boolean(data.resident && data.resident.isAdmin));
+
+        els.currentCycleLabel.textContent = cycleLabel || '—';
+        
+        const nextCycleDate = parseFlexibleDate(data.nextCycleOpenIso);
+        const serverNowDate = parseFlexibleDate(data.serverNowIso);
+        els.nextCycleOpenLabel.textContent = nextCycleDate ? formatDateTimeEn(nextCycleDate) : 'Cycle opening is not scheduled.';
+        startNextCycleCountdown(nextCycleDate, serverNowDate);
+        const visibleDays = filterCompletedDaysForSchedule(normalizedDays);
+
+        if (els.profileDetails) els.profileDetails.open = false;
+        if (els.profileNameInput) els.profileNameInput.value = data.resident.displayName || '';
+        if (els.profileRoomInput) els.profileRoomInput.value = data.resident.room || '';
+
+        els.metaGrid.innerHTML = '';
+        if (els.accessCard) els.accessCard.open = false;
+        if (els.recoveryDetails) els.recoveryDetails.open = false;
+        els.recoveryHelper.textContent = data.resident.hasRecoveryKey
+          ? 'A recovery key is already saved. You can replace it here anytime.'
+          : 'Set a recovery key so you can reset a forgotten access code yourself.';
+        [
+          ['Resident', data.resident.displayName],
+          ['Room', data.resident.room],
+          ['Access code', data.resident.accessCode],
+        ].forEach(([label, value]) => {
+          const div = document.createElement('div');
+          div.className = 'meta-item';
+          div.innerHTML = `<strong>${escapeHtml(label)}</strong>${escapeHtml(value || '—')}`;
+          els.metaGrid.appendChild(div);
+        });
+
+        els.reservationList.innerHTML = '';
+        if (!data.reservationCards || !data.reservationCards.length) {
+          els.reservationList.innerHTML = '<div class="helper"><i>You do not currently hold any slots in the active cycle.</i></div>';
+        } else {
+          data.reservationCards.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'reservation-item';
+            div.innerHTML = `
+              <div>
+                <strong>${escapeHtml(item.dayLabel)} · ${escapeHtml(item.slotLabel)}</strong><br>
+                <span class="helper"><strong>Your machine: ${escapeHtml(String(item.machineNo || '—'))}</strong></span>
+                <div class="slot-live-note js-slot-live-note" data-start="${escapeHtml(item.startIso || '')}" data-end="${escapeHtml(item.endIso || '')}" data-owned="true"></div>
+              </div>
+              <div class="actions">
+                ${item.canCancel
+                  ? `<button class="btn-danger" onclick="cancelReservation('${item.reservationId}')">Cancel</button>`
+                  : (item.isConcluded
+                      ? '<button class="btn-muted" disabled>Finished</button>'
+                      : '<button class="btn-muted" disabled>Locked</button>')}
+                
+                ${item.showChangeMachine
+                  ? `<button class="btn-secondary" ${item.canChangeMachine ? `onclick="openMachinePicker('${item.reservationId}')"` : 'disabled'}>
+                      ${item.canChangeMachine ? 'Change machine' : 'No free machine'}
+                    </button>`
+                  : ''}
+              </div>
+            `;
+            els.reservationList.appendChild(div);
+          });
+        }
+
+        els.scheduleHelper.textContent = data.bookingOpen
+          ? 'Click a free slot to claim it. If you already have a slot in that week, you can cancel it or move to another slot in that same week. You can move/cancel up to one hour after your slot starts.'
+          : 'Booking is currently closed. You can still view the schedule below.';
+
+        els.dayGrid.innerHTML = '';
+        if (!visibleDays.length) {
+          els.dayGrid.innerHTML = '<div class="helper"><i>There are no upcoming or active days to show right now.</i></div>';
+        }
+        visibleDays.forEach((day) => {
+          const card = document.createElement('details');
+          card.className = 'day-card';
+          card.open = false;
+
+          const openSlots = day.slots.filter(slot =>
+            slot.action === 'claim' || slot.action === 'move'
+          ).length;
+          const countClass = openSlots === 0
+            ? 'avail-none'
+            : (openSlots <= 2 ? 'avail-low' : (openSlots < day.slots.length ? 'avail-mid' : 'avail-high'));
+
+          const head = document.createElement('summary');
+          head.className = 'day-head';
+          head.innerHTML = `
+            <div>
+              <h3>${escapeHtml(formatDayCardTitle(day.date))}</h3>
+              <div class="helper">${escapeHtml(formatLongDateEn(day.date))}</div>
+            </div>
+            <div class="day-head-right">
+              <span class="day-count ${countClass}">${openSlots}/${day.slots.length} open</span>
+              <span class="chevron">›</span>
+            </div>
+          `;
+
+          const list = document.createElement('div');
+          list.className = 'slot-list';
+
+          day.slots.forEach(slot => {
+            const row = document.createElement('div');
+            row.className = 'slot-row';
+
+            const isFullSlot = slot.action === 'full';
+            const availabilityText = `${slot.availableCount}/${slot.capacity} free`;
+            const pillClass = slot.isMine ? 'pill mine' : (isFullSlot ? 'pill full' : 'pill');
+            const pillText = slot.isMine ? 'Your slot' : (isFullSlot ? 'Full' : availabilityText);
+
+            if (isFullSlot) {
+              row.classList.add('slot-full');
+            }
+
+            let actionHtml = '<button class="btn-muted" disabled>Unavailable</button>';
+
+            if (slot.isMine && slot.ownReservationId) {
+              const buttons = [];
+
+              if (slot.canCancel) {
+                buttons.push(
+                  `<button class="btn-danger" onclick="cancelReservation('${slot.ownReservationId}')">Cancel</button>`
+                );
+              } else if (slot.isConcluded) {
+                buttons.push('<button class="btn-muted" disabled>Finished</button>');
+              } else if (slot.isChangeLocked) {
+                buttons.push('<button class="btn-muted" disabled>Locked</button>');
+              }
+
+              if (slot.showChangeMachine) {
+                buttons.push(
+                  `<button class="btn-secondary" ${slot.canChangeMachine ? `onclick="openMachinePicker('${slot.ownReservationId}')"` : 'disabled'}>
+                    ${slot.canChangeMachine ? 'Change machine' : 'No free machine'}
+                  </button>`
+                );
+              }
+
+              actionHtml = buttons.join('');
+            } else if (slot.action === 'claim') {
+              actionHtml = `<button class="btn-primary" onclick="claim('${slot.slotId}')">Claim</button>`;
+            } else if (slot.action === 'move') {
+              actionHtml = `<button class="btn-secondary" onclick="moveReservation('${slot.ownReservationId}', '${slot.slotId}')">Move here</button>`;
+            } else if (slot.action === 'full') {
+              actionHtml = '<button class="btn-muted" disabled>Full</button>';
+            } else if (slot.action === 'past') {
+              actionHtml = '<button class="btn-muted" disabled>Finished</button>';
+            } else if (slot.action === 'closed') {
+              actionHtml = '<button class="btn-muted" disabled>Closed</button>';
+            } else if (slot.action === 'locked') {
+              actionHtml = '<button class="btn-muted" disabled>Locked</button>';
+            } else if (slot.action === 'used') {
+              actionHtml = '<button class="btn-muted" disabled>Used this week</button>';
+            }
+
+            row.innerHTML = `
+              <div class="slot-top">
+                <strong>${escapeHtml(slot.slotLabel)}</strong>
+                <span class="${pillClass}">${escapeHtml(pillText)}</span>
+              </div>
+              ${
+                slot.isMine && slot.ownMachineNo
+                  ? `<div class="helper"><strong>Your machine: ${escapeHtml(String(slot.ownMachineNo))}</strong></div>`
+                  : ''
+              }
+              <div class="slot-live-note js-slot-live-note" data-start="${escapeHtml(slot.startIso || '')}" data-end="${escapeHtml(slot.endIso || '')}" data-owned="${slot.isMine ? 'true' : 'false'}"></div>
+              <div class="actions">${actionHtml}</div>
+            `;
+
+            list.appendChild(row);
+          });
+
+          card.appendChild(head);
+          card.appendChild(list);
+          els.dayGrid.appendChild(card);
+        });
+
+        updateLiveSlotIndicators();
+        startLiveSlotIndicatorTimer();
+        updateRefreshButtonState();
+        window.requestAnimationFrame(updateRefreshFloatingState);
+      }
+
+      function normalizeDayGroups(groupedDays) {
+        const flatSlots = [];
+        Object.values(groupedDays || {}).forEach(slots => {
+          (slots || []).forEach(slot => flatSlots.push(slot));
+        });
+
+        flatSlots.sort((a, b) => dateSortValue(a.startIso || a.slotDate) - dateSortValue(b.startIso || b.slotDate));
+
+        const grouped = new Map();
+        flatSlots.forEach(slot => {
+          const key = normalizedDateKey(slot.startIso || slot.slotDate);
+          if (!grouped.has(key)) grouped.set(key, []);
+          grouped.get(key).push(slot);
+        });
+
+        return Array.from(grouped.entries()).map(([date, slots]) => ({
+          date,
+          slots: slots.slice().sort((a, b) => dateSortValue(a.startIso || a.slotDate) - dateSortValue(b.startIso || b.slotDate)),
+        }));
+      }
+
+      function filterCompletedDaysForSchedule(days) {
+        return (days || []).filter(day => (day.slots || []).some(slot => !isSlotFinishedForSchedule(slot)));
+      }
+
+      function buildCycleLabel(normalizedDays, fallbackStart, fallbackEnd) {
+        if (normalizedDays.length) {
+          const start = normalizedDays[0].date;
+          const end = normalizedDays[normalizedDays.length - 1].date;
+          return `${formatLongDateEn(start)} – ${formatLongDateEn(end)}`;
+        }
+        const start = formatLongDateEn(fallbackStart);
+        const end = formatLongDateEn(fallbackEnd);
+        if (start && end) return `${start} – ${end}`;
+        return start || end || '—';
+      }
+
+      function formatDateTimeEn(raw) {
+        const date = raw instanceof Date ? raw : parseFlexibleDate(raw);
+        if (!date) return '—';
+        return `${formatLongDateEn(date)} at ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      }
+
+      function startNextCycleCountdown(targetDate, serverNowDate) {
+        if (countdownTimer) {
+          window.clearInterval(countdownTimer);
+          countdownTimer = null;
+        }
+
+        if (!(targetDate instanceof Date) || Number.isNaN(targetDate.getTime())) {
+          els.nextCycleCountdown.textContent = 'Next opening time unavailable.';
+          return;
+        }
+
+        countdownServerBaseMs =
+          serverNowDate instanceof Date && !Number.isNaN(serverNowDate.getTime())
+            ? serverNowDate.getTime()
+            : Date.now();
+        countdownPerfBaseMs = performance.now();
+
+        const update = () => {
+          const estimatedServerNow = countdownServerBaseMs + (performance.now() - countdownPerfBaseMs);
+          const diff = targetDate.getTime() - estimatedServerNow;
+
+          if (diff <= 0) {
+            els.nextCycleCountdown.textContent = 'Claiming should now be open for the next cycle. Refresh the slots.';
+            return;
+          }
+
+          const totalSeconds = Math.floor(diff / 1000);
+          const days = Math.floor(totalSeconds / 86400);
+          const hours = Math.floor((totalSeconds % 86400) / 3600);
+          const minutes = Math.floor((totalSeconds % 3600) / 60);
+          const seconds = totalSeconds % 60;
+
+          const parts = [];
+          if (days) parts.push(`${days}d`);
+          if (days || hours) parts.push(`${hours}h`);
+          parts.push(`${minutes}m`);
+          parts.push(`${seconds}s`);
+          els.nextCycleCountdown.textContent = `Starts in ${parts.join(' ')}`;
+        };
+
+        update();
+        countdownTimer = window.setInterval(update, 1000);
+      }
+
+      function formatCompactDuration(ms) {
+        const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+        const days = Math.floor(totalSeconds / 86400);
+        const hours = Math.floor((totalSeconds % 86400) / 3600);
+        const minutes = Math.floor((totalSeconds % 3600) / 60);
+        const seconds = totalSeconds % 60;
+
+        const parts = [];
+        if (days) parts.push(`${days}d`);
+        if (days || hours) parts.push(`${hours}h`);
+        parts.push(`${minutes}m`);
+        parts.push(`${seconds}s`);
+        return parts.join(' ');
+      }
+
+      function isSlotFinishedForSchedule(slot) {
+        const end = parseFlexibleDate(slot && slot.endIso);
+        if (!end) return false;
+        return getEstimatedServerNowMs() >= end.getTime();
+      }
+
+      function computeSlotLiveState(startIso, endIso, isOwned) {
+        const start = parseFlexibleDate(startIso);
+        const end = parseFlexibleDate(endIso);
+        if (!start || !end) return { phase: 'none', text: '' };
+
+        const now = getEstimatedServerNowMs();
+        const startMs = start.getTime();
+        const endMs = end.getTime();
+        const cutoffMs = startMs + 60 * 60 * 1000;
+
+        if (now < startMs) {
+          if (!isOwned) return { phase: 'none', text: '' };
+          return {
+            phase: 'upcoming',
+            text: `Starts in ${formatCompactDuration(startMs - now)}`
+          };
+        }
+
+        if (now >= startMs && now < endMs) {
+          if (!isOwned) {
+            return {
+              phase: 'running',
+              text: 'Currently running'
+            };
+          }
+
+          if (now < cutoffMs) {
+            return {
+              phase: 'running',
+              text: `You can still move/cancel for ${formatCompactDuration(cutoffMs - now)}`
+            };
+          }
+
+          return {
+            phase: 'locked',
+            text: 'Running now · move/cancel closed'
+          };
+        }
+
+        return { phase: 'finished', text: '' };
+      }
+
+      function updateLiveSlotIndicators() {
+        document.querySelectorAll('.js-slot-live-note').forEach(note => {
+          const startIso = note.dataset.start || '';
+          const endIso = note.dataset.end || '';
+          const isOwned = note.dataset.owned === 'true';
+          const parent = note.closest('.reservation-item, .slot-row');
+
+          if (parent) {
+            parent.classList.remove('slot-upcoming-mine', 'slot-running', 'slot-running-locked');
+          }
+
+          const state = computeSlotLiveState(startIso, endIso, isOwned);
+
+          note.classList.remove('upcoming', 'running', 'locked');
+          note.textContent = '';
+
+          if (state.phase === 'upcoming') {
+            if (parent) parent.classList.add('slot-upcoming-mine');
+            note.classList.add('upcoming');
+            note.textContent = state.text;
+            note.style.display = '';
+          } else if (state.phase === 'running') {
+            if (parent) parent.classList.add('slot-running');
+            note.classList.add('running');
+            note.textContent = state.text;
+            note.style.display = '';
+          } else if (state.phase === 'locked') {
+            if (parent) parent.classList.add('slot-running-locked');
+            note.classList.add('locked');
+            note.textContent = state.text;
+            note.style.display = '';
+          } else {
+            note.style.display = 'none';
+          }
+        });
+      }
+
+      function startLiveSlotIndicatorTimer() {
+        if (liveSlotTimer) {
+          window.clearInterval(liveSlotTimer);
+          liveSlotTimer = null;
+        }
+        updateLiveSlotIndicators();
+        liveSlotTimer = window.setInterval(updateLiveSlotIndicators, 1000);
+      }
+
+      function stopLiveSlotIndicatorTimer() {
+        if (liveSlotTimer) {
+          window.clearInterval(liveSlotTimer);
+          liveSlotTimer = null;
+        }
+      }
+
+      function setRefreshScrollingState(isScrolling) {
+        document.body.classList.toggle('refresh-scrolling', Boolean(isScrolling));
+      }
+
+      function setRefreshFloatingState(isFloating) {
+        document.body.classList.toggle('refresh-floating', Boolean(isFloating));
+        if (!isFloating) {
+          setRefreshScrollingState(false);
+        }
+      }
+
+      function getRefreshStickyTopPx() {
+        if (window.innerWidth <= 680) return 8;
+        return 10;
+      }
+
+      function updateRefreshFloatingState() {
+        if (!els.scheduleRefreshBar || els.dashboardView.classList.contains('hidden')) {
+          setRefreshFloatingState(false);
+          return false;
+        }
+
+        const stickyTop = getRefreshStickyTopPx();
+        const rect = els.scheduleRefreshBar.getBoundingClientRect();
+        const isFloating = rect.top <= stickyTop + 1;
+
+        setRefreshFloatingState(isFloating);
+        return isFloating;
+      }
+
+      function bindRefreshScrollEffect() {
+        const onScrollLike = () => {
+          const isFloating = updateRefreshFloatingState();
+          if (!isFloating) return;
+
+          setRefreshScrollingState(true);
+
+          if (refreshScrollTimer) {
+            window.clearTimeout(refreshScrollTimer);
+          }
+
+          refreshScrollTimer = window.setTimeout(() => {
+            updateRefreshFloatingState();
+            setRefreshScrollingState(false);
+          }, 180);
+        };
+
+        updateRefreshFloatingState();
+
+        window.addEventListener('scroll', onScrollLike, { passive: true });
+        window.addEventListener('resize', () => {
+          updateRefreshFloatingState();
+          setRefreshScrollingState(false);
+        }, { passive: true });
+
+        document.addEventListener('touchmove', onScrollLike, { passive: true });
+        document.addEventListener('wheel', onScrollLike, { passive: true });
+      }
+
+      function getEstimatedServerNowMs() {
+        if (typeof countdownServerBaseMs !== 'number' || typeof countdownPerfBaseMs !== 'number') {
+          return Date.now();
+        }
+        return countdownServerBaseMs + (performance.now() - countdownPerfBaseMs);
+      }
+
+      function getDecisionDeadlineDate(slot) {
+        const start = parseFlexibleDate(slot && slot.startIso);
+        if (!start) return null;
+        return new Date(start.getTime() + 60 * 60 * 1000);
+      }
+
+      function isSlotRunning(slot) {
+        const start = parseFlexibleDate(slot && slot.startIso);
+        const end = parseFlexibleDate(slot && slot.endIso);
+        if (!start || !end) return false;
+        const now = getEstimatedServerNowMs();
+        return now >= start.getTime() && now < end.getTime();
+      }
+
+      function isDecisionWindowOpen(slot) {
+        const deadline = getDecisionDeadlineDate(slot);
+        if (!deadline) return false;
+        return getEstimatedServerNowMs() < deadline.getTime();
+      }
+
+      function findDashboardSlotById(slotId) {
+        const groupedDays = (state.dashboard && state.dashboard.groupedDays) || {};
+        for (const slots of Object.values(groupedDays)) {
+          const found = (slots || []).find(slot => slot.slotId === slotId);
+          if (found) return found;
+        }
+        return null;
+      }
+
+      function formatReservationForMovePrompt(reservationCard) {
+        if (!reservationCard) return 'your current reservation';
+
+        const dateText = reservationCard.startIso
+          ? formatLongDateEn(reservationCard.startIso)
+          : escapeHtml(reservationCard.dayLabel || 'selected day');
+
+        return `${dateText} at ${reservationCard.slotLabel || 'selected time'}`;
+      }
+
+      function formatSlotForMovePrompt(slot) {
+        if (!slot) return 'the selected free slot';
+
+        const dateText = slot.startIso
+          ? formatLongDateEn(slot.startIso)
+          : formatLongDateEn(slot.slotDate);
+
+        return `${dateText} at ${slot.slotLabel || 'selected time'}`;
+      }
+
+      function persistClientState() {
+        if (state.auth) {
+          localStorage.setItem(STORAGE_KEYS.auth, JSON.stringify(state.auth));
+        } else {
+          localStorage.removeItem(STORAGE_KEYS.auth);
+        }
+
+        if (state.dashboard) {
+          sessionStorage.setItem(STORAGE_KEYS.dashboard, JSON.stringify(state.dashboard));
+        } else {
+          sessionStorage.removeItem(STORAGE_KEYS.dashboard);
+        }
+
+        if (refreshCooldownUntilMs > Date.now()) {
+          sessionStorage.setItem(STORAGE_KEYS.refreshCooldownUntil, String(refreshCooldownUntilMs));
+        } else {
+          sessionStorage.removeItem(STORAGE_KEYS.refreshCooldownUntil);
+        }
+      }
+
+      function clearPersistedClientState() {
+        localStorage.removeItem(STORAGE_KEYS.auth);
+        sessionStorage.removeItem(STORAGE_KEYS.dashboard);
+        sessionStorage.removeItem(STORAGE_KEYS.refreshCooldownUntil);
+      }
+
+      function handleError(error) {
+        hideBusy();
+        const message = sanitizeServerMessage(getErrorMessage(error)) || 'Something went wrong.';
+
+        let title = 'Action could not be completed';
+        let shouldRefreshAfterClose = false;
+
+        if (/invalid room number or access code/i.test(message)) {
+          title = 'Sign in failed';
+        } else if (/already full/i.test(message)) {
+          title = 'Slot is full';
+          shouldRefreshAfterClose = true;
+        } else if (/not open for booking/i.test(message)) {
+          title = 'Booking is closed';
+          shouldRefreshAfterClose = true;
+        } else if (/selected slot was not found/i.test(message)) {
+          title = 'Slot is no longer available';
+          shouldRefreshAfterClose = true;
+        } else if (/change cutoff/i.test(message)) {
+          title = 'Reservation locked';
+          shouldRefreshAfterClose = true;
+        } else if (/already used or reserved a laundry slot/i.test(message)) {
+          title = 'Weekly slot already used';
+          shouldRefreshAfterClose = true;
+        } else if (/please retry in a moment|busy right now|opening right now|too many scripts running simultaneously|service invoked too many times/i.test(message)) {
+          title = 'Scheduler is busy';
+        } else if (/maximum number of active residents/i.test(message)) {
+          title = 'Room registration limit reached';
+        } else if (/enter a valid room number/i.test(message)) {
+          title = 'Invalid room number';
+        }
+        showNotice(title, message, {
+          variant: 'critical',
+          onClose: shouldRefreshAfterClose && state.auth ? () => refreshDashboard({ force: true }) : null,
+        });
+      }
+
+      function parseFlexibleDate(raw) {
+        if (!raw) return null;
+        if (raw instanceof Date && !isNaN(raw.getTime())) return new Date(raw.getTime());
+        const value = String(raw).trim();
+        if (!value) return null;
+
+        const ymd = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (ymd) return new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3]));
+
+        const iso = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/);
+        if (iso) {
+          return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]), Number(iso[4]), Number(iso[5]), Number(iso[6] || 0));
+        }
+
+        const date = new Date(value);
+        if (!isNaN(date.getTime())) return date;
+        return null;
+      }
+
+      function normalizedDateKey(raw) {
+        const date = parseFlexibleDate(raw);
+        if (!date) return String(raw || '');
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+
+      function dateSortValue(raw) {
+        const date = parseFlexibleDate(raw);
+        return date ? date.getTime() : Number.MAX_SAFE_INTEGER;
+      }
+
+      function formatDayCardTitle(raw) {
+        const date = parseFlexibleDate(raw);
+        if (!date) return String(raw || '—');
+        return new Intl.DateTimeFormat(DISPLAY_LOCALE, {
+          weekday: 'short',
+          day: '2-digit',
+          month: 'short',
+        }).format(date).replace(',', '');
+      }
+
+      function formatLongDateEn(raw) {
+        const date = parseFlexibleDate(raw);
+        if (!date) return String(raw || '—');
+        const weekday = new Intl.DateTimeFormat(DISPLAY_LOCALE, { weekday: 'long' }).format(date);
+        const month = new Intl.DateTimeFormat(DISPLAY_LOCALE, { month: 'long' }).format(date);
+        return `${weekday}, ${month} ${date.getDate()}${ordinalSuffix(date.getDate())} ${date.getFullYear()}`;
+      }
+
+      function ordinalSuffix(day) {
+        if (day >= 11 && day <= 13) return 'th';
+        const last = day % 10;
+        if (last === 1) return 'st';
+        if (last === 2) return 'nd';
+        if (last === 3) return 'rd';
+        return 'th';
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+
+    </script>
+    <div id="footer">
+    &copy; 2026 Dejan Jarc. All rights reserved.
+    </div>
+  </body>
+</html>
