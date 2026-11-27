@@ -1,11 +1,3 @@
-<!--
-Copyright 2026 Dejan Jarc
-
-Licensed under the Apache License, Version 2.0.
-You may not use this file except in compliance with the License.
--->
-
-
 <!DOCTYPE html>
 <html>
   <head>
@@ -571,10 +563,19 @@ You may not use this file except in compliance with the License.
         justify-content: center;
         padding: 20px;
         z-index: 9999;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
       }
       .overlay.show, .confirm-overlay.show, .code-overlay.show { display: flex; }
       .overlay-card, .confirm-card, .code-card {
         width: min(500px, 100%);
+        max-height: calc(100vh - 40px);
+        max-height: calc(100dvh - 40px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-gutter: stable;
         background: #ffffff;
         border-radius: 20px;
         padding: 24px;
@@ -645,6 +646,26 @@ You may not use this file except in compliance with the License.
         .auth-shell { width: 100%; }
       }
       @media (max-width: 680px) {
+        .overlay, .confirm-overlay, .code-overlay {
+          align-items: flex-start;
+          padding: max(10px, env(safe-area-inset-top, 0px)) 10px max(10px, env(safe-area-inset-bottom, 0px));
+        }
+        .overlay-card, .confirm-card, .code-card {
+          max-height: calc(100vh - 20px);
+          max-height: calc(100dvh - 20px);
+          margin: auto 0;
+        }
+        #reportOverlay .confirm-card {
+          width: 100%;
+        }
+        #reportOverlay .report-description {
+          min-height: 100px;
+          max-height: 30dvh;
+        }
+        #reportOverlay select,
+        #reportOverlay textarea {
+          font-size: 16px;
+        }
         body { font-size: 19px; }
         .wrap {
           width: 100%;
@@ -1206,6 +1227,36 @@ You may not use this file except in compliance with the License.
         color: var(--accent);
       }
 
+      .machine-report-cta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        border-color: #e7c7c7;
+        background: linear-gradient(180deg, #fffafa 0%, #ffffff 100%);
+      }
+
+      .machine-report-cta-copy {
+        min-width: 0;
+        flex: 1;
+      }
+
+      .machine-report-cta-actions {
+        flex: 0 0 auto;
+      }
+
+      @media (max-width: 680px) {
+        .machine-report-cta {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .machine-report-cta-actions,
+        .machine-report-cta-actions .btn-danger {
+          width: 100%;
+        }
+      }
+
       .help-card {
         width: min(560px, 100%);
         max-height: min(84vh, 760px);
@@ -1398,6 +1449,53 @@ You may not use this file except in compliance with the License.
       }
     }
 
+    .report-description {
+      width: 100%;
+      min-height: 120px;
+      padding: 13px 14px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font: inherit;
+      line-height: 1.45;
+      resize: vertical;
+      background: #fff;
+      color: var(--text);
+      box-sizing: border-box;
+    }
+
+    .report-description:focus {
+      outline: 2px solid rgba(47, 111, 237, 0.18);
+      border-color: var(--accent);
+    }
+
+    .report-field-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 7px 0 16px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .maintenance-warning {
+      margin: 14px 0;
+      padding: 14px 15px;
+      border: 1px solid #e7bd70;
+      border-radius: 12px;
+      background: #fff8e7;
+      color: #654500;
+      line-height: 1.5;
+    }
+
+    .maintenance-warning strong {
+      color: #503600;
+    }
+
+    .maintenance-warning a {
+      font-weight: 800;
+      color: #714d00;
+    }
+
     select {
       width: 100%;
       padding: 13px 14px;
@@ -1448,6 +1546,36 @@ You may not use this file except in compliance with the License.
       </div>
     </div>
 
+    <div class="confirm-overlay" id="reportOverlay" aria-live="polite" aria-modal="true" role="dialog">
+      <div class="confirm-card">
+        <h2 class="confirm-title" id="reportTitle">Report machine problem</h2>
+        <p class="confirm-text" id="reportText">Select the machine and describe what you noticed.</p>
+        <div class="maintenance-warning" id="reportMaintenanceWarning">
+          <strong>Important: this report only updates the laundry scheduler.</strong><br>
+          It does <b>not</b> send a repair request. <strong>The machine will not get repaired unless the fault is also reported in MojŠtudent.</strong><br>
+          <a href="https://student.sd-lj.si/#/okvare" target="_blank" rel="noopener noreferrer">Report the fault in MojŠtudent →</a>
+        </div>
+        <label for="reportMachineSelect">Machine</label>
+        <select id="reportMachineSelect"></select>
+        <div class="helper" id="reportMachineNotice" style="margin-top:8px;"></div>
+        <label for="reportDescription" style="margin-top:14px; display:block;">What did you notice?</label>
+        <textarea
+          id="reportDescription"
+          class="report-description"
+          maxlength="500"
+          placeholder="For example: the machine does not start, does not drain, or stopped during the cycle."
+        ></textarea>
+        <div class="report-field-meta">
+          <span>Please give a short, useful description.</span>
+          <span id="reportCharacterCount">0/500</span>
+        </div>
+        <div class="confirm-actions">
+          <button class="btn-muted" id="reportCancelBtn">Go back</button>
+          <button class="btn-danger" id="reportOkBtn">Send report</button>
+        </div>
+      </div>
+    </div>
+
     <div class="code-overlay" id="codeOverlay" aria-live="polite" aria-modal="true" role="dialog">
       <div class="code-card">
         <h2 class="code-title" id="codeTitle">Your access code</h2>
@@ -1478,6 +1606,14 @@ You may not use this file except in compliance with the License.
           <div>• You may hold <b>one</b> laundry reservation <b>per week</b>.</div>
           <div>• You can move or cancel your reservation <b>only until one hour after the slot starts</b>.</div>
           <div>• If you want to <b>switch the machine</b>, you can do that once <b>your slot starts running</b>.</div>
+          <div>• You can <b>report a machine problem at any time</b>, even if you are not currently using that machine.</div>
+          <div>• If a machine already has reports, the app will show that, but you can still submit <b>your own description</b>.</div>
+          <div>• A scheduler report <b>does not disable the machine automatically</b>. The dorm administrator reviews reports and decides whether to mark a machine out of order.</div>
+          <div class="maintenance-warning" style="margin:4px 0;">
+            <strong>Important: reporting here is only for the laundry scheduler.</strong><br>
+            It does not contact maintenance. <strong>The machine will not get repaired unless the fault is also reported in MojŠtudent.</strong><br>
+            <a href="https://student.sd-lj.si/#/okvare" target="_blank" rel="noopener noreferrer">Report the fault in MojŠtudent →</a>
+          </div>
           <div>• After the next cycle opens, <b>refresh the slots</b> to see the new schedule.</div>
           <div>• If you forget your access code, use your <b>recovery key</b> to reset it.</div>
           <div style="margin-top:8px;"><strong>If something goes wrong</strong></div>
@@ -1579,6 +1715,14 @@ You may not use this file except in compliance with the License.
               <div>• You may hold <b>one</b> laundry reservation <b>per week</b>.</div>
               <div>• You can move or cancel your reservation <b>only until one hour after the slot starts</b>.</div>
               <div>• If you want to <b>switch the machine</b>, you can do that once <b>your slot starts running</b>.</div>
+              <div>• You can <b>report a machine problem at any time</b>, even if you are not currently using that machine.</div>
+              <div>• If a machine already has reports, the app will show that, but you can still submit <b>your own description</b>.</div>
+              <div>• A scheduler report <b>does not disable the machine automatically</b>. The dorm administrator reviews reports and decides whether to mark a machine out of order.</div>
+          <div class="maintenance-warning" style="margin:4px 0;">
+            <strong>Important: reporting here is only for the laundry scheduler.</strong><br>
+            It does not contact maintenance. <strong>The machine will not get repaired unless the fault is also reported in MojŠtudent.</strong><br>
+            <a href="https://student.sd-lj.si/#/okvare" target="_blank" rel="noopener noreferrer">Report the fault in MojŠtudent →</a>
+          </div>
               <div>• After the next cycle opens, <b>refresh the slots</b> to see the new schedule.</div>
               <div>• If you forget your access code, use your <b>recovery key</b> to reset it.</div>
               <div>• If you move to another room, update your room number in <b>Account info</b>.</div>
@@ -1607,6 +1751,23 @@ You may not use this file except in compliance with the License.
           <div class="actions dashboard-actions" id="dashboardActions">
             <button class="btn-secondary btn-toolbar" onclick="openDashboardHelp()">Help</button>
             <button class="btn-muted btn-toolbar" onclick="logout()">Log out</button>
+          </div>
+        </div>
+
+        <div class="card machine-report-cta">
+          <div class="machine-report-cta-copy">
+            <h2 class="section-title" style="margin-bottom:6px;">Machine problem?</h2>
+            <p class="helper" style="margin:0;">
+              Report any laundry machine at any time so the scheduler administrator can stop assigning it if needed.
+              <strong>This does not create a maintenance request.</strong>
+            </p>
+            <p class="helper" style="margin:6px 0 0;">
+              <strong>The machine will not get repaired unless the fault is also reported in MojŠtudent.</strong>
+              <a href="https://student.sd-lj.si/#/okvare" target="_blank" rel="noopener noreferrer">Report it in MojŠtudent →</a>
+            </p>
+          </div>
+          <div class="actions machine-report-cta-actions">
+            <button class="btn-danger" onclick="openMachineReport()">Report a machine problem</button>
           </div>
         </div>
 
@@ -1723,6 +1884,7 @@ You may not use this file except in compliance with the License.
       let refreshCooldownUntilMs = 0;
       let refreshCooldownTimer = null;
       let pendingMachineReservationId = null;
+      let pendingReportReservationId = '';
 
       const STORAGE_KEYS = {
         auth: 'dormLaundryAuth',
@@ -1796,6 +1958,15 @@ You may not use this file except in compliance with the License.
         machineSelect: document.getElementById('machineSelect'),
         machineCancelBtn: document.getElementById('machineCancelBtn'),
         machineOkBtn: document.getElementById('machineOkBtn'),
+        reportOverlay: document.getElementById('reportOverlay'),
+        reportTitle: document.getElementById('reportTitle'),
+        reportText: document.getElementById('reportText'),
+        reportMachineSelect: document.getElementById('reportMachineSelect'),
+        reportMachineNotice: document.getElementById('reportMachineNotice'),
+        reportDescription: document.getElementById('reportDescription'),
+        reportCharacterCount: document.getElementById('reportCharacterCount'),
+        reportCancelBtn: document.getElementById('reportCancelBtn'),
+        reportOkBtn: document.getElementById('reportOkBtn'),
         profileDetails: document.getElementById('profileDetails'),
         profileNameInput: document.getElementById('profileNameInput'),
         profileRoomInput: document.getElementById('profileRoomInput'),
@@ -1827,6 +1998,11 @@ You may not use this file except in compliance with the License.
           busyTitle: 'Changing machine…',
           busyText: 'Saving your new machine and refreshing the board.',
           success: 'Machine changed successfully.'
+        },
+        reportMachineProblem: {
+          busyTitle: 'Sending report…',
+          busyText: 'Saving the machine problem for the dorm administrator.',
+          success: 'Scheduler report sent. IMPORTANT: the machine will not get repaired unless the fault is also reported in MojŠtudent.'
         },
         updateMyProfile: {
           busyTitle: 'Saving account info…',
@@ -2474,7 +2650,9 @@ You may not use this file except in compliance with the License.
           busyText: 'Updating your reservation and refreshing the board.',
           success: 'Saved.'
         };
-        const retryMaxAttempts = actionName === 'saveRecoveryKey' ? 2 : ACTION_RETRY_MAX_ATTEMPTS;
+        const retryMaxAttempts = actionName === 'reportMachineProblem'
+          ? 0
+          : (actionName === 'saveRecoveryKey' ? 2 : ACTION_RETRY_MAX_ATTEMPTS);
         const initialJitterMaxMs = actionName === 'claimSlot' ? 350 : 180;
 
         clearBanner();
@@ -2608,6 +2786,181 @@ You may not use this file except in compliance with the License.
         act('changeReservationMachine', reservationId, newMachineNo);
       }
 
+      function getMachineReportOption(machineNo) {
+        return ((state.dashboard && state.dashboard.machineReportOptions) || []).find(
+          item => Number(item.machineNo) === Number(machineNo)
+        ) || null;
+      }
+
+      async function loadMachineReportOptionsOnDemand() {
+        if (!state.auth) return null;
+
+        showBusy(
+          'Loading machines…',
+          'Refreshing machine status and report information.'
+        );
+
+        try {
+          const options = await callServerWithRetry(
+            'getMachineReportOptions',
+            [state.auth.room, state.auth.accessCode],
+            {
+              retry: {
+                maxAttempts: 2,
+                baseDelayMs: 500,
+                maxDelayMs: 1500,
+                initialJitterMaxMs: 120,
+              },
+            }
+          );
+
+          hideBusy();
+
+          if (!state.dashboard) state.dashboard = {};
+          state.dashboard.machineReportOptions = Array.isArray(options) ? options : [];
+          persistClientState();
+
+          return state.dashboard.machineReportOptions;
+        } catch (error) {
+          hideBusy();
+          handleError(error);
+          return null;
+        }
+      }
+
+      async function openMachineReport(reservationId = '') {
+        let options = (state.dashboard && state.dashboard.machineReportOptions) || [];
+
+        // A dashboard restored from browser/App Script cache may predate the
+        // machine-report-options field. Load it directly instead of treating
+        // missing cached data as "no machines configured".
+        if (!options.length) {
+          options = await loadMachineReportOptionsOnDemand();
+          if (options === null) return;
+        }
+
+        if (!options.length) {
+          showBanner(
+            'Machine information could not be found in the scheduler configuration.',
+            'warn'
+          );
+          return;
+        }
+
+        const reservation = reservationId
+          ? findReservationCardById(reservationId)
+          : null;
+
+        pendingReportReservationId = reservation ? reservation.reservationId : '';
+
+        els.reportTitle.textContent = 'Report machine problem';
+        els.reportText.innerHTML = reservation
+          ? `Machine <strong>${escapeHtml(String(reservation.machineNo || '—'))}</strong> is preselected from your reservation for <strong>${escapeHtml(reservation.dayLabel)} · ${escapeHtml(reservation.slotLabel)}</strong>. You may select another machine if that is the one you observed.`
+          : 'You can report any laundry machine at any time. Select the machine and describe what you observed. This informs the scheduler administrator only; it does not create a maintenance request.';
+
+        els.reportMachineSelect.innerHTML = options
+          .map(machine => {
+            const count = Number(machine.openReportCount || 0);
+            const status = String(machine.status || '').toUpperCase();
+            const suffix = [
+              status === 'OUT_OF_ORDER' ? 'out of order' : '',
+              count ? `${count} open report${count === 1 ? '' : 's'}` : '',
+            ].filter(Boolean).join(' · ');
+
+            return `<option value="${machine.machineNo}">Machine ${machine.machineNo}${suffix ? ` — ${escapeHtml(suffix)}` : ''}</option>`;
+          })
+          .join('');
+
+        if (reservation && getMachineReportOption(reservation.machineNo)) {
+          els.reportMachineSelect.value = String(reservation.machineNo);
+        }
+
+        els.reportDescription.value = '';
+        updateReportCharacterCount();
+        updateReportMachineNotice();
+        els.reportOverlay.classList.add('show');
+
+        els.reportMachineSelect.onchange = updateReportMachineNotice;
+        els.reportDescription.oninput = updateReportCharacterCount;
+        els.reportCancelBtn.onclick = closeMachineReport;
+        els.reportOkBtn.onclick = submitMachineReport;
+
+        // Avoid opening the mobile keyboard immediately. On narrow/touch layouts,
+        // let the resident read the warning and choose a machine before focusing
+        // the description field. Desktop users still get convenient autofocus.
+        if (window.matchMedia('(min-width: 681px) and (pointer: fine)').matches) {
+          window.setTimeout(() => els.reportDescription.focus(), 0);
+        }
+      }
+
+      function closeMachineReport() {
+        els.reportOverlay.classList.remove('show');
+        els.reportMachineSelect.onchange = null;
+        els.reportDescription.oninput = null;
+        els.reportCancelBtn.onclick = null;
+        els.reportOkBtn.onclick = null;
+        pendingReportReservationId = '';
+      }
+
+      function updateReportMachineNotice() {
+        const machineNo = Number(els.reportMachineSelect.value || 0);
+        const machine = getMachineReportOption(machineNo);
+
+        if (!machine) {
+          els.reportMachineNotice.textContent = '';
+          return;
+        }
+
+        const count = Number(machine.openReportCount || 0);
+        const outOfOrder = String(machine.status || '').toUpperCase() === 'OUT_OF_ORDER';
+
+        if (outOfOrder && count > 0) {
+          els.reportMachineNotice.innerHTML = `<strong>Machine ${machineNo} is already marked out of order and has ${count} open report${count === 1 ? '' : 's'}.</strong> You can still submit additional information.`;
+        } else if (outOfOrder) {
+          els.reportMachineNotice.innerHTML = `<strong>Machine ${machineNo} is already marked out of order.</strong> You can still submit additional information.`;
+        } else if (count > 0) {
+          els.reportMachineNotice.innerHTML = `<strong>Machine ${machineNo} already has ${count} open report${count === 1 ? '' : 's'}.</strong> You can still submit your own description.`;
+        } else {
+          els.reportMachineNotice.textContent = 'No open reports are currently shown for this machine.';
+        }
+      }
+
+      function updateReportCharacterCount() {
+        const length = (els.reportDescription.value || '').length;
+        els.reportCharacterCount.textContent = `${length}/500`;
+      }
+
+      function submitMachineReport() {
+        const machineNo = Number(els.reportMachineSelect.value || 0);
+        const description = String(els.reportDescription.value || '').trim();
+
+        if (!machineNo) {
+          showBanner('Please select a machine.', 'warn');
+          return;
+        }
+
+        if (description.length < 3) {
+          showBanner('Please briefly describe the machine problem.', 'warn');
+          els.reportDescription.focus();
+          return;
+        }
+
+        const reservation = pendingReportReservationId
+          ? findReservationCardById(pendingReportReservationId)
+          : null;
+
+        // Keep reservation/slot context only when the report is actually about
+        // the machine assigned to that reservation. General reports stay valid
+        // without any reservation context.
+        const reservationContextId =
+          reservation && Number(reservation.machineNo || 0) === machineNo
+            ? reservation.reservationId
+            : '';
+
+        closeMachineReport();
+        act('reportMachineProblem', machineNo, description, reservationContextId);
+      }
+
       function syncAdminDashboardButton(isAdmin) {
         if (!els.dashboardActions) return;
 
@@ -2685,7 +3038,23 @@ You may not use this file except in compliance with the License.
             div.innerHTML = `
               <div>
                 <strong>${escapeHtml(item.dayLabel)} · ${escapeHtml(item.slotLabel)}</strong><br>
-                <span class="helper"><strong>Your machine: ${escapeHtml(String(item.machineNo || '—'))}</strong></span>
+                <span class="helper">
+                  <strong>Your machine: ${escapeHtml(String(item.machineNo || '—'))}</strong>
+                </span>
+
+                ${item.machineWorking === false
+                  ? `
+                    <div class="helper" style="margin-top:6px;">
+                      <strong>⚠ This machine is currently marked out of order.</strong>
+                      ${
+                        item.showChangeMachine
+                          ? ' You can switch to another working machine if one is free.'
+                          : ''
+                      }
+                    </div>
+                  `
+                  : ''
+                }
                 <div class="slot-live-note js-slot-live-note" data-start="${escapeHtml(item.startIso || '')}" data-end="${escapeHtml(item.endIso || '')}" data-owned="true"></div>
               </div>
               <div class="actions">
@@ -2699,6 +3068,13 @@ You may not use this file except in compliance with the License.
                   ? `<button class="btn-secondary" ${item.canChangeMachine ? `onclick="openMachinePicker('${item.reservationId}')"` : 'disabled'}>
                       ${item.canChangeMachine ? 'Change machine' : 'No free machine'}
                     </button>`
+                  : ''}
+
+                ${item.machineNo
+                  ? `<button class="btn-danger" onclick="openMachineReport('${item.reservationId}')">Report problem</button>`
+                  : ''}
+                ${Number(item.machineOpenReportCount || 0) > 0
+                  ? `<span class="helper"><strong>${Number(item.machineOpenReportCount)} open report${Number(item.machineOpenReportCount) === 1 ? '' : 's'}</strong> for Machine ${escapeHtml(String(item.machineNo))}</span>`
                   : ''}
               </div>
             `;
@@ -2747,7 +3123,13 @@ You may not use this file except in compliance with the License.
             row.className = 'slot-row';
 
             const isFullSlot = slot.action === 'full';
-            const availabilityText = `${slot.availableCount}/${slot.capacity} free`;
+            const effectiveCapacity =
+              slot.operationalCapacity !== undefined
+                ? slot.operationalCapacity
+                : slot.capacity;
+
+            const availabilityText =
+              `${slot.availableCount}/${effectiveCapacity} free`;
             const pillClass = slot.isMine ? 'pill mine' : (isFullSlot ? 'pill full' : 'pill');
             const pillText = slot.isMine ? 'Your slot' : (isFullSlot ? 'Full' : availabilityText);
 
@@ -2778,6 +3160,12 @@ You may not use this file except in compliance with the License.
                 );
               }
 
+              if (slot.ownMachineNo) {
+                buttons.push(
+                  `<button class="btn-danger" onclick="openMachineReport('${slot.ownReservationId}')">Report problem</button>`
+                );
+              }
+
               actionHtml = buttons.join('');
             } else if (slot.action === 'claim') {
               actionHtml = `<button class="btn-primary" onclick="claim('${slot.slotId}')">Claim</button>`;
@@ -2802,7 +3190,32 @@ You may not use this file except in compliance with the License.
               </div>
               ${
                 slot.isMine && slot.ownMachineNo
-                  ? `<div class="helper"><strong>Your machine: ${escapeHtml(String(slot.ownMachineNo))}</strong></div>`
+                  ? `
+                    <div class="helper">
+                      <strong>
+                        Your machine: ${escapeHtml(String(slot.ownMachineNo))}
+                      </strong>
+                    </div>
+
+                    ${
+                      slot.ownMachineWorking === false
+                        ? `
+                          <div class="helper">
+                            <strong>⚠ This machine is currently out of order.</strong>
+                          </div>
+                        `
+                        : ''
+                    }
+
+                    ${Number(slot.machineOpenReportCount || 0) > 0
+                      ? `
+                        <div class="helper">
+                          ${Number(slot.machineOpenReportCount)} open report${Number(slot.machineOpenReportCount) === 1 ? '' : 's'} already exist for this machine. You can still add your own report.
+                        </div>
+                      `
+                      : ''
+                    }
+                  `
                   : ''
               }
               <div class="slot-live-note js-slot-live-note" data-start="${escapeHtml(slot.startIso || '')}" data-end="${escapeHtml(slot.endIso || '')}" data-owned="${slot.isMine ? 'true' : 'false'}"></div>

@@ -1,10 +1,3 @@
-/*
-Copyright 2026 Dejan Jarc
-
-Licensed under the Apache License, Version 2.0.
-You may not use this file except in compliance with the License.
-*/
-
 const ADMIN_APP_CONFIG = {
   HTML_FILE: 'AdminPage',
   SHEETS: {
@@ -144,6 +137,63 @@ function verifyAdminAccess(room, accessCode, adminPin) {
 
   const session = createAdminSession_(resident);
   return buildAdminEnvelope_(session, { adminToken: session.token });
+}
+
+function buildAdminMachineCards_() {
+  const reservationsByMachine = {};
+  const reportsByMachine = {};
+
+  getAllReservations_()
+    .filter(reservation => reservation.status === 'confirmed')
+    .forEach(reservation => {
+      const slot = findSlotById_(reservation.slotId);
+      if (!slot || isSlotConcluded_(slot)) return;
+
+      const machineNo = Number(reservation.machineNo || 0);
+      if (!machineNo) return;
+
+      reservationsByMachine[machineNo] =
+        (reservationsByMachine[machineNo] || 0) + 1;
+    });
+
+  getOpenMachineReports_().forEach(report => {
+    reportsByMachine[report.machineNo] =
+      (reportsByMachine[report.machineNo] || 0) + 1;
+  });
+
+  return getMachines_().map(machine => ({
+    machineNo: machine.machineNo,
+    status: machine.status,
+    statusChangedAtIso: valueToIsoString_(machine.statusChangedAt),
+    statusNote: machine.statusNote,
+    openReservationCount: reservationsByMachine[machine.machineNo] || 0,
+    openReportCount: reportsByMachine[machine.machineNo] || 0,
+  }));
+}
+
+function buildAdminMachineReportCards_() {
+  return getOpenMachineReports_()
+    .map(report => {
+      const slot = findSlotById_(report.slotId);
+
+      return {
+        reportId: report.reportId,
+        machineNo: report.machineNo,
+        residentId: report.residentId,
+        room: report.room,
+        displayName: report.displayName,
+        reservationId: report.reservationId,
+        slotId: report.slotId,
+        reportedAtIso: valueToIsoString_(report.reportedAt),
+        description: report.description,
+        dayLabel: slot ? slot.dayLabel || '' : '',
+        slotDate: slot ? slot.slotDate || '' : '',
+        slotLabel: slot ? slot.slotLabel || '' : '',
+        startIso: slot ? slot.startIso || '' : '',
+        endIso: slot ? slot.endIso || '' : '',
+      };
+    })
+    .sort((a, b) => String(b.reportedAtIso || '').localeCompare(String(a.reportedAtIso || '')));
 }
 
 function adminUpdateResidentProfile(adminToken, residentId, newDisplayName, newRoom, notes) {
@@ -570,13 +620,195 @@ function getAdminDashboardData_() {
     staleResidents: residents.filter(r => r.isStale).length,
     residentsWithRecoveryKey: residents.filter(r => r.hasRecoveryKey).length,
     openReservations: residents.reduce((sum, r) => sum + (r.reservationStats.openCount || 0), 0),
+    openMachineReports: getOpenMachineReports_().length,
   };
 
   return {
     generatedAtIso: new Date().toISOString(),
     stats,
+    machines: buildAdminMachineCards_(),
+    machineReports: buildAdminMachineReportCards_(),
     residents,
   };
+}
+
+function setMachineStatusLocked_(machineNo, status, note) {
+  machineNo = Number(machineNo || 0);
+  status = String(status || '').trim().toUpperCase();
+  note = String(note || '').trim();
+
+  if (machineNo < 1 || machineNo > APP_CONFIG.SLOT_CAPACITY) {
+    throw new Error('Invalid machine number.');
+  }
+  if (!['WORKING', 'OUT_OF_ORDER'].includes(status)) {
+    throw new Error('Invalid machine status.');
+  }
+
+  const { sheet, map } = getSheetRef_(APP_CONFIG.SHEETS.MACHINES);
+  const values = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const rowMachineNo = Number(getCellValue_(row, map, 'machine_no') || 0);
+    if (rowMachineNo !== machineNo) continue;
+
+    const oldStatus = String(getCellValue_(row, map, 'status') || '').trim().toUpperCase();
+
+    setCellValue_(row, map, 'status', status);
+    setCellValue_(row, map, 'status_changed_at', new Date());
+    setCellValue_(row, map, 'status_note', status === 'WORKING' ? '' : note);
+
+    sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+    clearExecutionCaches_();
+    bumpDataCacheVersion_();
+
+    return { machineNo, oldStatus, status };
+  }
+
+  throw new Error(`Machine ${machineNo} was not found.`);
+}
+
+function adminSetMachineStatus(adminToken, machineNo, status, note) {
+  ensureSchema_();
+  ensureAdminSchema_();
+
+  const session = requireAdminSession_(adminToken);
+  machineNo = Number(machineNo || 0);
+  status = String(status || '').trim().toUpperCase();
+  note = String(note || '').trim();
+
+  const lock = acquireScriptLockOrThrow_(
+    APP_CONFIG.MUTATION_LOCK_TIMEOUT_MS,
+    'Machine status is being updated. Please retry in a moment.'
+  );
+
+  try {
+    const result = setMachineStatusLocked_(machineNo, status, note);
+
+    if (status === 'OUT_OF_ORDER') {
+      resolveOpenMachineReportsForMachine_(
+        machineNo,
+        session.viewerResidentId,
+        note || `Machine ${machineNo} marked out of order by admin.`,
+        APP_CONFIG.MACHINE_REPORT_STATUSES.MACHINE_OUT_OF_ORDER
+      );
+    } else if (status === 'WORKING') {
+      // Marking a repaired machine working closes any reports that arrived
+      // during that out-of-order period. They remain in MachineReports as
+      // history, while the next breakdown starts with a clean active inbox.
+      resolveOpenMachineReportsForMachine_(
+        machineNo,
+        session.viewerResidentId,
+        `Machine ${machineNo} marked working again; previous issue cycle closed.`,
+        APP_CONFIG.MACHINE_REPORT_STATUSES.MACHINE_RESTORED
+      );
+    }
+
+    logAudit_(
+      session.viewerResidentId,
+      'admin_set_machine_status',
+      String(machineNo),
+      `Machine ${machineNo}: ${result.oldStatus || 'UNKNOWN'} -> ${status}` +
+        (note ? ` | ${note}` : '')
+    );
+
+    const freshSession = requireAdminSession_(session.token);
+    return buildAdminEnvelope_(freshSession);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function adminDismissMachineReport(adminToken, reportId, resolutionNote) {
+  ensureSchema_();
+  ensureAdminSchema_();
+
+  const session = requireAdminSession_(adminToken);
+  reportId = String(reportId || '').trim();
+  resolutionNote = String(resolutionNote || '').trim();
+  if (!reportId) throw new Error('Machine report is required.');
+
+  const lock = acquireScriptLockOrThrow_(
+    APP_CONFIG.MUTATION_LOCK_TIMEOUT_MS,
+    'Machine report is being updated. Please retry in a moment.'
+  );
+
+  try {
+    const report = findMachineReportById_(reportId);
+    if (!report) throw new Error('Machine report was not found.');
+    if (report.status !== APP_CONFIG.MACHINE_REPORT_STATUSES.OPEN) {
+      throw new Error('This machine report has already been resolved.');
+    }
+
+    resolveMachineReport_(
+      reportId,
+      APP_CONFIG.MACHINE_REPORT_STATUSES.DISMISSED,
+      session.viewerResidentId,
+      resolutionNote || 'Dismissed by admin.'
+    );
+
+    logAudit_(
+      session.viewerResidentId,
+      'admin_dismiss_machine_report',
+      reportId,
+      `Dismissed Machine ${report.machineNo} report from ${report.displayName} (room ${report.room})` +
+        (resolutionNote ? ` | ${resolutionNote}` : '')
+    );
+
+    const freshSession = requireAdminSession_(session.token);
+    return buildAdminEnvelope_(freshSession);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function adminMarkMachineOutOfOrderFromReport(adminToken, reportId, note) {
+  ensureSchema_();
+  ensureAdminSchema_();
+
+  const session = requireAdminSession_(adminToken);
+  reportId = String(reportId || '').trim();
+  note = String(note || '').trim();
+  if (!reportId) throw new Error('Machine report is required.');
+
+  const lock = acquireScriptLockOrThrow_(
+    APP_CONFIG.MUTATION_LOCK_TIMEOUT_MS,
+    'Machine report is being processed. Please retry in a moment.'
+  );
+
+  try {
+    const report = findMachineReportById_(reportId);
+    if (!report) throw new Error('Machine report was not found.');
+    if (report.status !== APP_CONFIG.MACHINE_REPORT_STATUSES.OPEN) {
+      throw new Error('This machine report has already been resolved.');
+    }
+
+    const machineNote = note || report.description;
+    const result = setMachineStatusLocked_(
+      report.machineNo,
+      'OUT_OF_ORDER',
+      machineNote
+    );
+
+    resolveOpenMachineReportsForMachine_(
+      report.machineNo,
+      session.viewerResidentId,
+      machineNote || `Machine ${report.machineNo} marked out of order from report ${reportId}.`
+    );
+
+    logAudit_(
+      session.viewerResidentId,
+      'admin_machine_out_of_order_from_report',
+      reportId,
+      `Machine ${report.machineNo}: ${result.oldStatus || 'UNKNOWN'} -> OUT_OF_ORDER from report ${reportId}` +
+        (machineNote ? ` | ${machineNote}` : '')
+    );
+
+    const freshSession = requireAdminSession_(session.token);
+    return buildAdminEnvelope_(freshSession);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function buildAdminResidentCard_(resident) {

@@ -1,10 +1,3 @@
-/*
-Copyright 2026 Dejan Jarc
-
-Licensed under the Apache License, Version 2.0.
-You may not use this file except in compliance with the License.
-*/
-
 const APP_CONFIG = {
   APP_NAME: 'Dorm 14 Laundry Schedule',
   MENU_NAME: 'Dorm 14 Laundry',
@@ -12,7 +5,7 @@ const APP_CONFIG = {
   TZ: 'Europe/Ljubljana',
   SPREADSHEET_ID_KEY: 'SPREADSHEET_ID',
   SCHEMA_VERSION_KEY: 'SCHEMA_VERSION',
-  SCHEMA_VERSION: 'dorm14-fresh-v2',
+  SCHEMA_VERSION: 'dorm14-fresh-v4',
   PUBLIC_BOARD_SIGNATURE_KEY: 'PUBLIC_BOARD_SIGNATURE',
   PUBLIC_BOARD_DIRTY_KEY: 'PUBLIC_BOARD_DIRTY',
   PUBLIC_BOARD_TRIGGER_INSTALLED_KEY: 'PUBLIC_BOARD_TRIGGER_INSTALLED',
@@ -34,6 +27,8 @@ const APP_CONFIG = {
     SLOTS: 'Slots',
     RESERVATIONS: 'Reservations',
     RESERVATIONS_ARCHIVE: 'ReservationsArchive',
+    MACHINES: 'Machines',
+    MACHINE_REPORTS: 'MachineReports',
     PUBLIC_BOARD: 'PublicBoard',
     AUDIT: 'Audit',
     AUDIT_ARCHIVE: 'AuditArchive',
@@ -56,6 +51,27 @@ const APP_CONFIG = {
       'disabled_at',
       'disabled_reason'
     ],
+    MACHINES: [
+      'machine_no',
+      'status',
+      'status_changed_at',
+      'status_note'
+    ],
+    MACHINE_REPORTS: [
+      'report_id',
+      'machine_no',
+      'resident_id',
+      'room',
+      'display_name',
+      'reservation_id',
+      'slot_id',
+      'reported_at',
+      'description',
+      'status',
+      'resolved_at',
+      'resolved_by_resident_id',
+      'resolution_note'
+    ],
     SLOTS: ['slot_id', 'week_key', 'slot_date', 'day_label', 'slot_label', 'start_iso', 'end_iso', 'capacity', 'is_open', 'cycle_start_date', 'created_at'],
     RESERVATIONS: ['reservation_id', 'resident_id', 'room', 'display_name', 'slot_id', 'week_key', 'status', 'created_at', 'updated_at', 'note', 'machine_no', 'resident_label'],
     PUBLIC_BOARD: ['Day / Dan', 'Date / Datum', 'Machine / Stroj', '2:00 - 6:00', '6:00 - 10:00', '10:00 - 14:00', '14:00 - 18:00', '18:00 - 22:00', '22:00 - 2:00'],
@@ -70,6 +86,13 @@ const APP_CONFIG = {
     { startHour: 22, label: '22:00–02:00' },
   ],
   SLOT_CAPACITY: 4,
+  MACHINE_REPORT_STATUSES: {
+    OPEN: 'OPEN',
+    DISMISSED: 'DISMISSED',
+    MACHINE_OUT_OF_ORDER: 'MACHINE_OUT_OF_ORDER',
+    MACHINE_RESTORED: 'MACHINE_RESTORED',
+  },
+  MACHINE_REPORT_DESCRIPTION_MAX_LENGTH: 500,
   CYCLE_DAYS: 14,
   ACCESS_CODE_LENGTH: 6,
   AUTOMATION_CHECK_EVERY_MINUTES: 10,
@@ -96,6 +119,8 @@ let _CONFIRMED_RESERVATION_COUNTS_BY_SLOT_CACHE = null;
 let _CONFIRMED_RESERVATIONS_BY_RESIDENT_CACHE = null;
 let _DATA_CACHE_VERSION_CACHE = null;
 let _CONFIRMED_RESERVATIONS_BY_SLOT_CACHE = null;
+let _MACHINES_CACHE = null;
+let _MACHINE_REPORTS_CACHE = null;
 
 function doGet(e) {
   ensureSchema_();
@@ -765,6 +790,9 @@ function claimSlot(room, accessCode, slotId) {
     'Too many residents are changing reservations right now. Please retry in a moment.'
   );
   try {
+    // Reload from Sheets only AFTER the script lock is acquired.
+    // Another request may have created a reservation while we waited.
+    getAllReservations_(true);
     slot = findSlotById_(slotId);
     if (!slot) throw new Error('Selected slot was not found.');
 
@@ -775,8 +803,8 @@ function claimSlot(room, accessCode, slotId) {
     if (!slot.isOpen || !normalizeBoolean_(getSettingsMap_().booking_open)) {
       throw new Error('This slot is not open for booking right now.');
     }
-    if (countConfirmedReservationsForSlot_(slot.slotId) >= slot.capacity) {
-      throw new Error('This slot is already full.');
+    if (!getNextMachineNoForSlot_(slot.slotId)) {
+      throw new Error('This slot has no working machine available.');
     }
 
     const existingForWeek = getConfirmedReservationsForResident_(resident.residentId)
@@ -843,6 +871,8 @@ function moveReservation(room, accessCode, reservationId, newSlotId) {
     'Too many residents are changing reservations right now. Please retry in a moment.'
   );
   try {
+    // Do not decide on the old reservation or target capacity from a stale cache.
+    getAllReservations_(true);
     const reservation = findReservationById_(reservationId);
     if (!reservation || reservation.status !== 'confirmed') throw new Error('Current reservation was not found.');
     if (reservation.residentId !== resident.residentId) throw new Error('You can only move your own reservation.');
@@ -865,8 +895,9 @@ function moveReservation(room, accessCode, reservationId, newSlotId) {
     if (!newSlot.isOpen || !normalizeBoolean_(getSettingsMap_().booking_open)) {
       throw new Error('Target slot is not open for booking right now.');
     }
-    if (countConfirmedReservationsForSlot_(newSlot.slotId) >= newSlot.capacity) {
-      throw new Error('Target slot is already full.');
+
+    if (!getNextMachineNoForSlot_(newSlot.slotId)) {
+      throw new Error('Target slot has no working machine available.');
     }
 
     const confirmed = getConfirmedReservationsForResident_(resident.residentId);
@@ -909,9 +940,30 @@ function getActiveCycleSummary() {
 // Dashboard builders
 // ---------------------------
 
+function buildMachineReportOptions_() {
+  const openMachineReportCounts = getOpenMachineReportCountsByMachine_();
+
+  return getMachines_().map(machine => ({
+    machineNo: machine.machineNo,
+    status: machine.status,
+    openReportCount: openMachineReportCounts[machine.machineNo] || 0,
+  }));
+}
+
 function decorateDashboardAuth_(dashboard, resident) {
   dashboard.auth = { room: resident.room, accessCode: resident.accessCode };
+
+  // Machine report controls must stay current even when the main dashboard
+  // payload was served from Apps Script cache.
+  dashboard.machineReportOptions = buildMachineReportOptions_();
+
   return dashboard;
+}
+
+function getMachineReportOptions(room, accessCode) {
+  ensureSchema_();
+  requireResident_(room, accessCode);
+  return buildMachineReportOptions_();
 }
 
 function getSimulationOpenIso_() {
@@ -963,6 +1015,7 @@ function getDashboardData_(resident) {
   const slotById = getSlotByIdMap_();
   const reservationCounts = getConfirmedReservationCountsBySlot_();
   const residentReservations = getConfirmedReservationsForResident_(resident.residentId);
+  const openMachineReportCounts = getOpenMachineReportCountsByMachine_();
 
   const activeSlots = allSlots
     .filter(slot => normalizeDateCellToYmd_(slot.cycleStartDate) === cycleStartText)
@@ -979,7 +1032,8 @@ function getDashboardData_(resident) {
 
   activeSlots.forEach(slot => {
     slot.reservedCount = reservationCounts[slot.slotId] || 0;
-    slot.availableCount = Math.max(0, slot.capacity - slot.reservedCount);
+    slot.operationalCapacity = getWorkingMachineNumbers_().length;
+    slot.availableCount = getBookableMachineCountForSlot_(slot.slotId);
 
     if (!groupedDays[slot.slotDate]) groupedDays[slot.slotDate] = [];
 
@@ -1000,6 +1054,11 @@ function getDashboardData_(resident) {
     const ownCanChangeMachine =
       Boolean(ownShowChangeMachine && ownAvailableMachineNos.length > 0);
 
+    const ownMachineOpenReportCount =
+      ownIsCurrentSlot && ownReservation
+        ? (openMachineReportCounts[Number(ownReservation.machineNo || 0)] || 0)
+        : 0;
+
     groupedDays[slot.slotDate].push({
       slotId: slot.slotId,
       slotDate: slot.slotDate,
@@ -1009,12 +1068,17 @@ function getDashboardData_(resident) {
       endIso: slot.endIso,
       weekKey: slot.weekKey,
       capacity: slot.capacity,
+      operationalCapacity: slot.operationalCapacity,
       reservedCount: slot.reservedCount,
       availableCount: slot.availableCount,
       isOpen: bookingOpen && slot.isOpen,
       isMine: ownIsCurrentSlot,
       ownReservationId: ownReservation ? ownReservation.reservationId : '',
       ownMachineNo: ownIsCurrentSlot && ownReservation ? ownReservation.machineNo : '',
+      ownMachineWorking:
+        ownIsCurrentSlot && ownReservation
+          ? isMachineWorking_(ownReservation.machineNo)
+          : true,
       hasOwnReservationThisWeek: Boolean(ownReservation),
       canCancel: Boolean(ownIsCurrentSlot && ownReservationCanChange),
       isConcluded: slotConcluded,
@@ -1022,6 +1086,7 @@ function getDashboardData_(resident) {
       availableMachineNos: ownAvailableMachineNos,
       showChangeMachine: ownShowChangeMachine,
       canChangeMachine: ownCanChangeMachine,
+      machineOpenReportCount: ownMachineOpenReportCount,
       action: resolveSlotAction_(slot, ownReservation, ownReservationCanChange, bookingOpen),
     });
   });
@@ -1051,6 +1116,8 @@ function getDashboardData_(resident) {
       const availableMachineNos = getAvailableMachineNumbersForSlot_(slot.slotId, r.reservationId);
       const showChangeMachine = !isConcluded && canChangeMachineForSlot_(slot);
       const canChangeMachine = showChangeMachine && availableMachineNos.length > 0;
+      const machineOpenReportCount =
+        openMachineReportCounts[Number(r.machineNo || 0)] || 0;
 
       return {
         reservationId: r.reservationId,
@@ -1066,6 +1133,7 @@ function getDashboardData_(resident) {
         dayLabel: slot.dayLabel || '',
         slotLabel: slot.slotLabel || '',
         machineNo: r.machineNo,
+        machineWorking: isMachineWorking_(r.machineNo),
         residentLabel: r.residentLabel,
         createdAtIso: valueToIsoString_(r.createdAt),
         updatedAtIso: valueToIsoString_(r.updatedAt),
@@ -1075,6 +1143,7 @@ function getDashboardData_(resident) {
         availableMachineNos,
         showChangeMachine,
         canChangeMachine,
+        machineOpenReportCount,
       };
     });
 
@@ -1092,6 +1161,7 @@ function getDashboardData_(resident) {
     cycleEndText,
     nextCycleOpenIso: getNextCycleOpenIso_(),
     serverNowIso: nowLocalIso_(),
+    machineReportOptions: buildMachineReportOptions_(),
     reservationCards,
     groupedDays,
   };
@@ -1628,8 +1698,11 @@ function ensureSchema_(force) {
   ensureSheet_(ss, APP_CONFIG.SHEETS.PUBLIC_BOARD, APP_CONFIG.HEADERS.PUBLIC_BOARD);
   ensureSheet_(ss, APP_CONFIG.SHEETS.AUDIT, APP_CONFIG.HEADERS.AUDIT);
   ensureSheet_(ss, APP_CONFIG.SHEETS.AUDIT_ARCHIVE, APP_CONFIG.HEADERS.AUDIT);
+  ensureSheet_(ss, APP_CONFIG.SHEETS.MACHINES, APP_CONFIG.HEADERS.MACHINES);
+  ensureSheet_(ss, APP_CONFIG.SHEETS.MACHINE_REPORTS, APP_CONFIG.HEADERS.MACHINE_REPORTS);
 
   writeDefaultSettings_(ss);
+  writeDefaultMachines_(ss);
   freezeHeaderRows_(ss);
 
   props.setProperty(APP_CONFIG.SCHEMA_VERSION_KEY, APP_CONFIG.SCHEMA_VERSION);
@@ -1741,6 +1814,8 @@ function freezeHeaderRows_(ss) {
     APP_CONFIG.SHEETS.RESERVATIONS_ARCHIVE,
     APP_CONFIG.SHEETS.AUDIT,
     APP_CONFIG.SHEETS.AUDIT_ARCHIVE,
+    APP_CONFIG.SHEETS.MACHINES,
+    APP_CONFIG.SHEETS.MACHINE_REPORTS
   ].forEach(name => {
     const sheet = ss.getSheetByName(name);
     if (sheet) sheet.setFrozenRows(1);
@@ -1780,6 +1855,49 @@ function writeDefaultSettings_(ss) {
     sheet.getRange(sheet.getLastRow() + 1, 1, rowsToAdd.length, rowsToAdd[0].length).setValues(rowsToAdd);
     clearExecutionCaches_();
   }
+}
+
+function writeDefaultMachines_(ss) {
+  const sheet = ss.getSheetByName(APP_CONFIG.SHEETS.MACHINES);
+  const values = sheet.getDataRange().getValues();
+
+  const existingMachineNos = new Set(
+    values
+      .slice(1)
+      .map(row => Number(row[0] || 0))
+      .filter(machineNo => machineNo > 0)
+  );
+
+  const now = new Date();
+  const rowsToAdd = [];
+
+  for (
+    let machineNo = 1;
+    machineNo <= APP_CONFIG.SLOT_CAPACITY;
+    machineNo++
+  ) {
+    if (existingMachineNos.has(machineNo)) continue;
+
+    rowsToAdd.push([
+      machineNo,
+      'WORKING',
+      now,
+      ''
+    ]);
+  }
+
+  if (!rowsToAdd.length) return;
+
+  sheet
+    .getRange(
+      sheet.getLastRow() + 1,
+      1,
+      rowsToAdd.length,
+      APP_CONFIG.HEADERS.MACHINES.length
+    )
+    .setValues(rowsToAdd);
+
+  clearExecutionCaches_({ resetStructure: true });
 }
 
 function getSettingsMap_() {
@@ -1865,6 +1983,8 @@ function clearExecutionCaches_(options) {
   _CONFIRMED_RESERVATIONS_BY_RESIDENT_CACHE = null;
   _DATA_CACHE_VERSION_CACHE = null;
   _CONFIRMED_RESERVATIONS_BY_SLOT_CACHE = null;
+  _MACHINES_CACHE = null;
+  _MACHINE_REPORTS_CACHE = null;
 
   if (resetStructure) {
     _HEADER_MAP_CACHE = {};
@@ -2013,9 +2133,228 @@ function getAllSlots_() {
   return _SLOTS_CACHE;
 }
 
-function getAllReservations_() {
+function getMachines_() {
+  if (_MACHINES_CACHE) return _MACHINES_CACHE;
+
+  const { sheet, map } = getSheetRef_(APP_CONFIG.SHEETS.MACHINES);
+  const values = sheet.getDataRange().getValues();
+
+  _MACHINES_CACHE = values
+    .slice(1)
+    .map(row => ({
+      machineNo: Number(getCellValue_(row, map, 'machine_no') || 0),
+      status: String(
+        getCellValue_(row, map, 'status') || ''
+      ).trim().toUpperCase(),
+      statusChangedAt: getCellValue_(row, map, 'status_changed_at'),
+      statusNote: String(
+        getCellValue_(row, map, 'status_note') || ''
+      ).trim(),
+    }))
+    .filter(machine => machine.machineNo > 0)
+    .sort((a, b) => a.machineNo - b.machineNo);
+
+  return _MACHINES_CACHE;
+}
+
+function getWorkingMachineNumbers_() {
+  return getMachines_()
+    .filter(machine => machine.status === 'WORKING')
+    .map(machine => machine.machineNo);
+}
+
+function getMachineStatus_(machineNo) {
+  const machine = getMachines_()
+    .find(item => item.machineNo === Number(machineNo));
+
+  return machine ? machine.status : 'OUT_OF_ORDER';
+}
+
+function isMachineWorking_(machineNo) {
+  return getMachineStatus_(machineNo) === 'WORKING';
+}
+
+function getMachineReports_() {
+  if (_MACHINE_REPORTS_CACHE) return _MACHINE_REPORTS_CACHE;
+
+  const { sheet, map } = getSheetRef_(APP_CONFIG.SHEETS.MACHINE_REPORTS);
+  const values = sheet.getDataRange().getValues();
+
+  _MACHINE_REPORTS_CACHE = values
+    .slice(1)
+    .filter(row => String(getCellValue_(row, map, 'report_id') || '').trim())
+    .map(row => ({
+      reportId: String(getCellValue_(row, map, 'report_id') || '').trim(),
+      machineNo: Number(getCellValue_(row, map, 'machine_no') || 0),
+      residentId: String(getCellValue_(row, map, 'resident_id') || '').trim(),
+      room: normalizeRoom_(getCellValue_(row, map, 'room')),
+      displayName: normalizeDisplayName_(getCellValue_(row, map, 'display_name')),
+      reservationId: String(getCellValue_(row, map, 'reservation_id') || '').trim(),
+      slotId: String(getCellValue_(row, map, 'slot_id') || '').trim(),
+      reportedAt: getCellValue_(row, map, 'reported_at'),
+      description: String(getCellValue_(row, map, 'description') || '').trim(),
+      status: String(getCellValue_(row, map, 'status') || '').trim().toUpperCase(),
+      resolvedAt: getCellValue_(row, map, 'resolved_at'),
+      resolvedByResidentId: String(getCellValue_(row, map, 'resolved_by_resident_id') || '').trim(),
+      resolutionNote: String(getCellValue_(row, map, 'resolution_note') || '').trim(),
+    }));
+
+  return _MACHINE_REPORTS_CACHE;
+}
+
+function findMachineReportById_(reportId) {
+  reportId = String(reportId || '').trim();
+  return getMachineReports_().find(report => report.reportId === reportId) || null;
+}
+
+function getOpenMachineReports_() {
+  return getMachineReports_().filter(
+    report => report.status === APP_CONFIG.MACHINE_REPORT_STATUSES.OPEN
+  );
+}
+
+function getOpenMachineReportForReservationMachine_(reservationId, machineNo) {
+  reservationId = String(reservationId || '').trim();
+  machineNo = Number(machineNo || 0);
+
+  return getOpenMachineReports_().find(report =>
+    report.reservationId === reservationId &&
+    report.machineNo === machineNo
+  ) || null;
+}
+
+function getOpenMachineReportCountsByMachine_() {
+  const counts = {};
+
+  getOpenMachineReports_().forEach(report => {
+    const machineNo = Number(report.machineNo || 0);
+    if (!machineNo) return;
+    counts[machineNo] = (counts[machineNo] || 0) + 1;
+  });
+
+  return counts;
+}
+
+function appendMachineReport_(resident, machineNo, description, context) {
+  context = context || {};
+
+  const { sheet, map } = getSheetRef_(APP_CONFIG.SHEETS.MACHINE_REPORTS);
+  const reportId = `MREP-${Utilities.getUuid().split('-')[0].toUpperCase()}`;
+  const row = new Array(APP_CONFIG.HEADERS.MACHINE_REPORTS.length).fill('');
+
+  setCellValue_(row, map, 'report_id', reportId);
+  setCellValue_(row, map, 'machine_no', Number(machineNo || 0));
+  setCellValue_(row, map, 'resident_id', resident.residentId);
+  setCellValue_(row, map, 'room', resident.room);
+  setCellValue_(row, map, 'display_name', resident.displayName);
+  setCellValue_(row, map, 'reservation_id', String(context.reservationId || '').trim());
+  setCellValue_(row, map, 'slot_id', String(context.slotId || '').trim());
+  setCellValue_(row, map, 'reported_at', new Date());
+  setCellValue_(row, map, 'description', description);
+  setCellValue_(row, map, 'status', APP_CONFIG.MACHINE_REPORT_STATUSES.OPEN);
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+  clearExecutionCaches_();
+  bumpDataCacheVersion_();
+
+  return reportId;
+}
+
+function resolveMachineReport_(reportId, status, resolvedByResidentId, resolutionNote) {
+  const allowedStatuses = [
+    APP_CONFIG.MACHINE_REPORT_STATUSES.DISMISSED,
+    APP_CONFIG.MACHINE_REPORT_STATUSES.MACHINE_OUT_OF_ORDER,
+    APP_CONFIG.MACHINE_REPORT_STATUSES.MACHINE_RESTORED,
+  ];
+
+  if (!allowedStatuses.includes(status)) {
+    throw new Error('Invalid machine report resolution status.');
+  }
+
+  const { sheet, map } = getSheetRef_(APP_CONFIG.SHEETS.MACHINE_REPORTS);
+  const values = sheet.getDataRange().getValues();
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const rowReportId = String(getCellValue_(row, map, 'report_id') || '').trim();
+    if (rowReportId !== String(reportId || '').trim()) continue;
+
+    const currentStatus = String(getCellValue_(row, map, 'status') || '').trim().toUpperCase();
+    if (currentStatus !== APP_CONFIG.MACHINE_REPORT_STATUSES.OPEN) {
+      throw new Error('This machine report has already been resolved.');
+    }
+
+    setCellValue_(row, map, 'status', status);
+    setCellValue_(row, map, 'resolved_at', new Date());
+    setCellValue_(row, map, 'resolved_by_resident_id', String(resolvedByResidentId || '').trim());
+    setCellValue_(row, map, 'resolution_note', String(resolutionNote || '').trim());
+
+    sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+    clearExecutionCaches_();
+    bumpDataCacheVersion_();
+    return true;
+  }
+
+  throw new Error('Machine report was not found.');
+}
+
+function resolveOpenMachineReportsForMachine_(machineNo, resolvedByResidentId, resolutionNote, resolutionStatus) {
+  machineNo = Number(machineNo || 0);
+  resolutionStatus = String(
+    resolutionStatus || APP_CONFIG.MACHINE_REPORT_STATUSES.MACHINE_OUT_OF_ORDER
+  ).trim().toUpperCase();
+
+  const allowedStatuses = [
+    APP_CONFIG.MACHINE_REPORT_STATUSES.MACHINE_OUT_OF_ORDER,
+    APP_CONFIG.MACHINE_REPORT_STATUSES.MACHINE_RESTORED,
+  ];
+  if (!allowedStatuses.includes(resolutionStatus)) {
+    throw new Error('Invalid bulk machine report resolution status.');
+  }
+
+  const { sheet, map } = getSheetRef_(APP_CONFIG.SHEETS.MACHINE_REPORTS);
+  const values = sheet.getDataRange().getValues();
+  let changed = false;
+  const now = new Date();
+
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const rowMachineNo = Number(getCellValue_(row, map, 'machine_no') || 0);
+    const status = String(getCellValue_(row, map, 'status') || '').trim().toUpperCase();
+
+    if (rowMachineNo !== machineNo || status !== APP_CONFIG.MACHINE_REPORT_STATUSES.OPEN) {
+      continue;
+    }
+
+    setCellValue_(row, map, 'status', resolutionStatus);
+    setCellValue_(row, map, 'resolved_at', now);
+    setCellValue_(row, map, 'resolved_by_resident_id', String(resolvedByResidentId || '').trim());
+    setCellValue_(row, map, 'resolution_note', String(resolutionNote || '').trim());
+
+    sheet.getRange(i + 1, 1, 1, row.length).setValues([row]);
+    changed = true;
+  }
+
+  if (changed) {
+    clearExecutionCaches_();
+    bumpDataCacheVersion_();
+  }
+
+  return changed;
+}
+
+function getAllReservations_(forceFresh) {
+  if (forceFresh) {
+    // Critical reservation mutations must not reuse a snapshot loaded before
+    // acquiring the lock (or an older version from CacheService).
+    _RESERVATIONS_CACHE = null;
+    _RESERVATION_BY_ID_CACHE = null;
+    _CONFIRMED_RESERVATION_COUNTS_BY_SLOT_CACHE = null;
+    _CONFIRMED_RESERVATIONS_BY_RESIDENT_CACHE = null;
+    _CONFIRMED_RESERVATIONS_BY_SLOT_CACHE = null;
+  }
   if (_RESERVATIONS_CACHE) return _RESERVATIONS_CACHE;
-  _RESERVATIONS_CACHE = getCachedJson_('reservations', 'all', APP_CONFIG.DATA_CACHE_TTL_SECONDS, () => {
+  const readReservations = () => {
     const { values, map } = getReservationsSheetInfo_();
     if (values.length < 2) return [];
     return values.slice(1)
@@ -2034,7 +2373,10 @@ function getAllReservations_() {
         machineNo: Number(getCellValue_(row, map, 'machine_no') || 0),
         residentLabel: String(getCellValue_(row, map, 'resident_label') || '').trim(),
       }));
-  });
+  };
+  _RESERVATIONS_CACHE = forceFresh
+    ? readReservations()
+    : getCachedJson_('reservations', 'all', APP_CONFIG.DATA_CACHE_TTL_SECONDS, readReservations);
   return _RESERVATIONS_CACHE;
 }
 
@@ -2367,6 +2709,10 @@ function createReservation_(resident, slot, status, note) {
   const { sheet, map } = getSheetRef_(APP_CONFIG.SHEETS.RESERVATIONS);
   const now = new Date();
   const reservationId = `RESV-${Utilities.getUuid().split('-')[0].toUpperCase()}`;
+  if (status === 'confirmed' && getConfirmedReservationsForResident_(resident.residentId)
+    .some(r => r.weekKey === slot.weekKey)) {
+    throw new Error('You already used or reserved a laundry slot in this week.');
+  }
   const machineNo = status === 'confirmed' ? getNextMachineNoForSlot_(slot.slotId) : 0;
   if (status === 'confirmed' && !machineNo) {
     throw new Error('This slot is already full. Please refresh and choose another slot.');
@@ -2387,6 +2733,9 @@ function createReservation_(resident, slot, status, note) {
   setCellValue_(row, map, 'resident_label', formatResidentLabel_(resident.displayName, resident.room));
 
   sheet.getRange(sheet.getLastRow() + 1, 1, 1, row.length).setValues([row]);
+  // Commit the row before releasing the caller's script lock; otherwise the
+  // next locked request may read Sheets before this reservation is visible.
+  SpreadsheetApp.flush();
   clearExecutionCaches_();
   bumpDataCacheVersion_();
   return { reservationId, machineNo };
@@ -2428,11 +2777,56 @@ function getUsedMachineNumbersForSlot_(slotId) {
 }
 
 function getNextMachineNoForSlot_(slotId) {
-  const used = new Set(getUsedMachineNumbersForSlot_(slotId));
-  for (let machineNo = 1; machineNo <= APP_CONFIG.SLOT_CAPACITY; machineNo++) {
-    if (!used.has(machineNo)) return machineNo;
+  const confirmedReservations = getConfirmedReservationsBySlotMap_()[slotId] || [];
+  const workingMachines = getWorkingMachineNumbers_();
+
+  // A reservation that is still assigned to a newly broken machine still
+  // consumes one operational booking place. Otherwise new residents could
+  // fill every working machine and leave that resident with nowhere to switch.
+  if (confirmedReservations.length >= workingMachines.length) {
+    return 0;
   }
+
+  const used = new Set(
+    confirmedReservations
+      .map(r => Number(r.machineNo || 0))
+      .filter(n => n >= 1 && n <= APP_CONFIG.SLOT_CAPACITY)
+  );
+
+  for (const machineNo of workingMachines) {
+    if (!used.has(machineNo)) {
+      return machineNo;
+    }
+  }
+
   return 0;
+}
+
+function getBookableMachineCountForSlot_(slotId) {
+  const confirmedReservations = getConfirmedReservationsBySlotMap_()[slotId] || [];
+  const workingMachines = getWorkingMachineNumbers_();
+
+  const remainingOperationalPlaces = Math.max(
+    0,
+    workingMachines.length - confirmedReservations.length
+  );
+
+  if (remainingOperationalPlaces <= 0) return 0;
+
+  const used = new Set(
+    confirmedReservations
+      .map(r => Number(r.machineNo || 0))
+      .filter(n => n >= 1 && n <= APP_CONFIG.SLOT_CAPACITY)
+  );
+
+  const freeWorkingMachines = workingMachines
+    .filter(machineNo => !used.has(machineNo))
+    .length;
+
+  return Math.max(
+    0,
+    Math.min(freeWorkingMachines, remainingOperationalPlaces)
+  );
 }
 
 function syncReservationMetadata_() {
@@ -2467,7 +2861,10 @@ function syncReservationMetadata_() {
       let machineNo = item.machineNo;
       if (!(machineNo >= 1 && machineNo <= APP_CONFIG.SLOT_CAPACITY) || used.has(machineNo)) {
         machineNo = 0;
-        for (let n = 1; n <= APP_CONFIG.SLOT_CAPACITY; n++) {
+        
+        const workingMachines = getWorkingMachineNumbers_();
+
+        for (const n of workingMachines) {
           if (!used.has(n)) {
             machineNo = n;
             break;
@@ -2503,11 +2900,8 @@ function getAvailableMachineNumbersForSlot_(slotId, excludeReservationId) {
       .filter(n => n >= 1 && n <= APP_CONFIG.SLOT_CAPACITY)
   );
 
-  const free = [];
-  for (let n = 1; n <= APP_CONFIG.SLOT_CAPACITY; n++) {
-    if (!used.has(n)) free.push(n);
-  }
-  return free;
+  return getWorkingMachineNumbers_()
+    .filter(machineNo => !used.has(machineNo));
 }
 
 function canChangeMachineForSlot_(slot) {
@@ -2545,6 +2939,77 @@ function updateReservationMachine_(reservationId, newMachineNo, note) {
   return false;
 }
 
+function reportMachineProblem(room, accessCode, machineNo, description, reservationId) {
+  ensureSchema_();
+  ensureCycleOpenedIfDue_();
+  const resident = requireResident_(room, accessCode);
+
+  machineNo = Number(machineNo || 0);
+  description = String(description || '').trim();
+  reservationId = String(reservationId || '').trim();
+
+  const machineExists = getMachines_().some(machine => machine.machineNo === machineNo);
+  if (!machineExists) {
+    throw new Error('Select a valid laundry machine.');
+  }
+  if (description.length < 3) {
+    throw new Error('Please briefly describe the machine problem.');
+  }
+  if (description.length > APP_CONFIG.MACHINE_REPORT_DESCRIPTION_MAX_LENGTH) {
+    throw new Error(
+      `Problem description is too long. Use at most ${APP_CONFIG.MACHINE_REPORT_DESCRIPTION_MAX_LENGTH} characters.`
+    );
+  }
+
+  let reportId = '';
+  let context = {};
+
+  const lock = acquireScriptLockOrThrow_(
+    APP_CONFIG.MUTATION_LOCK_TIMEOUT_MS,
+    'Machine reporting is busy right now. Please retry in a moment.'
+  );
+
+  try {
+    if (reservationId) {
+      const reservation = findReservationById_(reservationId);
+
+      if (!reservation || reservation.residentId !== resident.residentId) {
+        throw new Error('The reservation attached to this report is not available.');
+      }
+
+      if (Number(reservation.machineNo || 0) !== machineNo) {
+        throw new Error('The selected machine does not match the attached reservation.');
+      }
+
+      context = {
+        reservationId: reservation.reservationId,
+        slotId: reservation.slotId,
+      };
+    }
+
+    reportId = appendMachineReport_(resident, machineNo, description, context);
+
+    const contextText = context.reservationId
+      ? ` | reservation ${context.reservationId}`
+      : '';
+
+    logAudit_(
+      resident.residentId,
+      'report_machine_problem',
+      reportId,
+      `${resident.displayName} reported Machine ${machineNo}: ${description}${contextText}`
+    );
+  } finally {
+    lock.releaseLock();
+  }
+
+  touchResidentActivity_(resident.residentId, { force: true });
+
+  const dashboard = decorateDashboardAuth_(getDashboardData_(resident), resident);
+  dashboard.machineReportResult = { reportId, machineNo };
+  return dashboard;
+}
+
 function changeReservationMachine(room, accessCode, reservationId, newMachineNo) {
   ensureSchema_();
   ensureCycleOpenedIfDue_();
@@ -2579,6 +3044,10 @@ function changeReservationMachine(room, accessCode, reservationId, newMachineNo)
     newMachineNo = Number(newMachineNo || 0);
     if (!(newMachineNo >= 1 && newMachineNo <= slot.capacity)) {
       throw new Error('Selected machine is invalid.');
+    }
+
+    if (!isMachineWorking_(newMachineNo)) {
+      throw new Error('That machine is currently out of order.');
     }
 
     const currentMachineNo = Number(reservation.machineNo || 0);

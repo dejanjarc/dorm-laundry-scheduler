@@ -1,10 +1,3 @@
-<!--
-Copyright 2026 Dejan Jarc
-
-Licensed under the Apache License, Version 2.0.
-You may not use this file except in compliance with the License.
--->
-
 <!DOCTYPE html>
 <html>
   <head>
@@ -363,12 +356,21 @@ You may not use this file except in compliance with the License.
         justify-content: center;
         padding: 20px;
         z-index: 9999;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
       }
 
       .overlay.show, .confirm-overlay.show, .code-overlay.show { display: flex; }
 
       .overlay-card, .confirm-card, .code-card {
         width: min(520px, 100%);
+        max-height: calc(100vh - 40px);
+        max-height: calc(100dvh - 40px);
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-gutter: stable;
         background: #ffffff;
         border-radius: 20px;
         padding: 24px;
@@ -432,6 +434,16 @@ You may not use this file except in compliance with the License.
       }
 
       @media (max-width: 680px) {
+        .overlay, .confirm-overlay, .code-overlay {
+          align-items: flex-start;
+          padding: max(10px, env(safe-area-inset-top, 0px)) 10px max(10px, env(safe-area-inset-bottom, 0px));
+        }
+        .overlay-card, .confirm-card, .code-card {
+          width: 100%;
+          max-height: calc(100vh - 20px);
+          max-height: calc(100dvh - 20px);
+          margin: auto 0;
+        }
         .wrap { padding: 10px; }
         .card { padding: 18px; }
         .dashboard-topbar h1 { font-size: 25px; }
@@ -453,6 +465,158 @@ You may not use this file except in compliance with the License.
           min-height: 54px;
           font-size: 17px;
         }
+      }
+
+      .report-inbox-empty {
+        border: 1px dashed var(--border);
+        border-radius: 14px;
+        padding: 18px;
+        background: #fbfdff;
+      }
+
+      .report-machine-list {
+        display: grid;
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .report-machine-group {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        background: #fbfdff;
+        padding: 14px;
+        scroll-margin-top: 16px;
+      }
+
+      .report-machine-group.has-alert {
+        border-color: #edc6c3;
+        background: #fffafa;
+      }
+
+      .report-machine-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+      }
+
+      .report-machine-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .report-machine-title strong {
+        font-size: 17px;
+      }
+
+      .report-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .report-card {
+        border: 1px solid var(--border);
+        border-radius: 13px;
+        background: #fff;
+        padding: 13px;
+        display: grid;
+        gap: 9px;
+      }
+
+      .report-card-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .report-description {
+        white-space: pre-wrap;
+        line-height: 1.45;
+        overflow-wrap: anywhere;
+      }
+
+      .report-context {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .report-count-pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 12px;
+        font-weight: 700;
+        background: #fff1f1;
+        color: var(--danger);
+      }
+
+      .machine-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+        margin-top: 16px;
+      }
+
+      .machine-card {
+        border: 1px solid #d9dee7;
+        border-radius: 14px;
+        padding: 16px;
+        background: #fff;
+      }
+
+      .machine-card.out-of-order {
+        border-color: #e8b4b4;
+        background: #fff8f8;
+      }
+
+      .machine-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .machine-card-head strong {
+        font-size: 17px;
+      }
+
+      .machine-status {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 5px 9px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .machine-status.working {
+        background: #e7f5ec;
+        color: #196c3a;
+      }
+
+      .machine-status.out-of-order {
+        background: #fdeaea;
+        color: #9e2727;
+      }
+
+      .machine-note {
+        margin-top: 12px;
+      }
+
+      .machine-note textarea {
+        width: 100%;
+        min-height: 64px;
+        resize: vertical;
       }
     </style>
   </head>
@@ -534,6 +698,33 @@ You may not use this file except in compliance with the License.
         </div>
 
         <div class="card">
+          <div>
+            <h2 class="section-title">Laundry machines</h2>
+            <p class="helper">
+              Machines marked out of order are excluded from automatic assignment
+              and cannot be selected by residents.
+            </p>
+          </div>
+
+          <div class="machine-grid" id="machineGrid"></div>
+        </div>
+
+        <div class="card" id="machineReportsCard">
+          <div>
+            <h2 class="section-title">Open machine reports</h2>
+            <p class="helper">
+              Only unresolved reports are shown here. Reports are removed from this active inbox when you
+              dismiss them, mark the machine out of order, or later mark a repaired machine as working again.
+              Older resolved reports remain in the MachineReports sheet as history.
+              These scheduler reports do not create a maintenance request; residents must also report faults in
+              <a href="https://student.sd-lj.si/#/okvare" target="_blank" rel="noopener noreferrer">MojŠtudent</a>
+              for the machine to be repaired.
+            </p>
+          </div>
+          <div class="report-machine-list" id="machineReportList"></div>
+        </div>
+
+        <div class="card">
           <div class="toolbar-grid">
             <div>
               <label for="searchInput">Search residents</label>
@@ -567,6 +758,7 @@ You may not use this file except in compliance with the License.
         adminToken: '',
         session: null,
         dashboard: null,
+        reportGroupsExpanded: {},
       };
 
       let bannerTimer = null;
@@ -580,6 +772,8 @@ You may not use this file except in compliance with the License.
         adminPinInput: document.getElementById('adminPinInput'),
         dashboardSubtitle: document.getElementById('dashboardSubtitle'),
         statsGrid: document.getElementById('statsGrid'),
+        machineGrid: document.getElementById('machineGrid'),
+        machineReportList: document.getElementById('machineReportList'),
         residentList: document.getElementById('residentList'),
         searchInput: document.getElementById('searchInput'),
         filterSelect: document.getElementById('filterSelect'),
@@ -813,7 +1007,7 @@ You may not use this file except in compliance with the License.
       function logoutAdmin() {
         const token = state.adminToken;
         localStorage.removeItem(STORAGE_KEY);
-        state = { adminToken: '', session: null, dashboard: null };
+        state = { adminToken: '', session: null, dashboard: null, reportGroupsExpanded: {} };
         showAuthView();
         setAuthStatus('Logged out.', 'ok');
         showBanner('Logged out.', 'ok');
@@ -831,6 +1025,8 @@ You may not use this file except in compliance with the License.
           `Admin session: ${session.viewerDisplayName || '—'} · room ${session.viewerRoom || '—'}`;
 
         renderStats();
+        renderMachines();
+        renderMachineReports();
         renderResidentList();
       }
 
@@ -843,6 +1039,7 @@ You may not use this file except in compliance with the License.
           ['Stale residents', stats.staleResidents || 0],
           ['With recovery key', stats.residentsWithRecoveryKey || 0],
           ['Open reservations', stats.openReservations || 0],
+          ['Open machine reports', stats.openMachineReports || 0],
         ];
 
         els.statsGrid.innerHTML = cards.map(([label, value]) => `
@@ -852,6 +1049,362 @@ You may not use this file except in compliance with the License.
           </div>
         `).join('');
       }
+
+      function renderMachines() {
+  const machines =
+    (state.dashboard && state.dashboard.machines) || [];
+
+  if (!machines.length) {
+    els.machineGrid.innerHTML =
+      '<div class="helper"><i>No machines configured.</i></div>';
+    return;
+  }
+
+  els.machineGrid.innerHTML = machines.map(machine => {
+    const working = machine.status === 'WORKING';
+
+    const statusLabel = working
+      ? '● Working'
+      : '● Out of order';
+
+    const changedText = machine.statusChangedAtIso
+      ? formatDateTime(machine.statusChangedAtIso)
+      : '—';
+
+    const reservationWarning =
+      machine.openReservationCount > 0
+        ? `
+          <div class="helper">
+            <strong>
+              ${escapeHtml(String(machine.openReservationCount))}
+              open reservation${machine.openReservationCount === 1 ? '' : 's'}
+              currently assigned
+            </strong>
+          </div>
+        `
+        : '';
+
+    const reportWarning = Number(machine.openReportCount || 0) > 0
+      ? `
+        <div class="helper" style="margin-top:6px;">
+          <strong>${escapeHtml(String(machine.openReportCount))} open problem report${Number(machine.openReportCount) === 1 ? '' : 's'}</strong>
+          · <button class="btn-muted" style="padding:5px 8px;font-size:12px;" onclick="scrollToMachineReports(${machine.machineNo})">View reports</button>
+        </div>
+      `
+      : '';
+
+    return `
+      <div class="machine-card ${working ? '' : 'out-of-order'}">
+        <div class="machine-card-head">
+          <strong>Machine ${escapeHtml(String(machine.machineNo))}</strong>
+
+          <span class="machine-status ${working ? 'working' : 'out-of-order'}">
+            ${statusLabel}
+          </span>
+        </div>
+
+        <div class="helper">
+          Status changed: ${escapeHtml(changedText)}
+        </div>
+
+        ${reservationWarning}
+        ${reportWarning}
+
+        <div class="machine-note">
+          <label for="machineNote_${machine.machineNo}">
+            ${working ? 'Problem description' : 'Problem / note'}
+          </label>
+
+          <textarea
+            id="machineNote_${machine.machineNo}"
+            placeholder="Optional note about the problem"
+          >${escapeHtml(machine.statusNote || '')}</textarea>
+        </div>
+
+        <div class="actions">
+          ${
+            working
+              ? `
+                <button
+                  class="btn-danger"
+                  onclick="markMachineOutOfOrder(${machine.machineNo})"
+                >
+                  Mark out of order
+                </button>
+              `
+              : `
+                <button
+                  class="btn-ok"
+                  onclick="markMachineWorking(${machine.machineNo})"
+                >
+                  Mark working
+                </button>
+              `
+          }
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function renderMachineReports() {
+  const reports = (state.dashboard && state.dashboard.machineReports) || [];
+  const machines = (state.dashboard && state.dashboard.machines) || [];
+
+  if (!reports.length) {
+    els.machineReportList.innerHTML = `
+      <div class="report-inbox-empty helper">
+        <strong>No open machine reports.</strong><br>
+        New resident reports will appear here until you dismiss them or close the machine issue.
+      </div>
+    `;
+    return;
+  }
+
+  const grouped = {};
+  reports.forEach(report => {
+    const machineNo = Number(report.machineNo || 0);
+    if (!grouped[machineNo]) grouped[machineNo] = [];
+    grouped[machineNo].push(report);
+  });
+
+  const machineNos = Object.keys(grouped)
+    .map(Number)
+    .sort((a, b) => a - b);
+
+  els.machineReportList.innerHTML = machineNos.map(machineNo => {
+    const machineReports = grouped[machineNo] || [];
+    const machine = machines.find(item => Number(item.machineNo) === machineNo) || {};
+    const working = machine.status === 'WORKING';
+    const expanded = Boolean(state.reportGroupsExpanded[machineNo]);
+    const visibleReports = expanded ? machineReports : machineReports.slice(0, 4);
+    const hiddenCount = Math.max(0, machineReports.length - visibleReports.length);
+
+    return `
+      <div class="report-machine-group ${machineReports.length ? 'has-alert' : ''}" id="machineReports_${machineNo}">
+        <div class="report-machine-head">
+          <div class="report-machine-title">
+            <strong>Machine ${escapeHtml(String(machineNo))}</strong>
+            <span class="machine-status ${working ? 'working' : 'out-of-order'}">
+              ${working ? '● Working' : '● Out of order'}
+            </span>
+            <span class="report-count-pill">
+              ${escapeHtml(String(machineReports.length))} open report${machineReports.length === 1 ? '' : 's'}
+            </span>
+          </div>
+          ${!working ? '<span class="helper">Reports received while the machine is out of order will close automatically when you mark it working again.</span>' : ''}
+        </div>
+
+        <div class="report-list">
+          ${visibleReports.map(report => renderMachineReportCard(report, working)).join('')}
+        </div>
+
+        ${machineReports.length > 4 ? `
+          <div class="actions" style="margin-top:10px;">
+            <button class="btn-muted" onclick="toggleMachineReportGroup(${machineNo})">
+              ${expanded ? 'Show fewer' : `Show ${hiddenCount} more`}
+            </button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function renderMachineReportCard(report, machineWorking) {
+  const hasReservationContext = Boolean(report.reservationId || report.slotId);
+  const contextText = hasReservationContext
+    ? [report.dayLabel, report.slotLabel].filter(Boolean).join(' · ') || 'Linked reservation'
+    : 'General report · not linked to a reservation';
+
+  return `
+    <div class="report-card">
+      <div class="report-card-top">
+        <div>
+          <strong>${escapeHtml(report.displayName || 'Resident')}</strong>
+          <div class="helper">
+            Room ${escapeHtml(report.room || '—')} · ${escapeHtml(formatDateTime(report.reportedAtIso) || 'Unknown time')}
+          </div>
+        </div>
+        <span class="pill none">${escapeHtml(contextText)}</span>
+      </div>
+
+      <div class="report-description">${escapeHtml(report.description || 'No description provided.')}</div>
+
+      ${hasReservationContext && report.reservationId ? `
+        <div class="helper">Reservation: ${escapeHtml(report.reservationId)}</div>
+      ` : ''}
+
+      <div class="actions">
+        <button class="btn-muted" onclick="dismissMachineReport('${escapeJs(report.reportId)}')">Dismiss report</button>
+        ${machineWorking ? `
+          <button class="btn-danger" onclick="markMachineOutOfOrderFromReport('${escapeJs(report.reportId)}')">
+            Mark Machine ${escapeHtml(String(report.machineNo))} out of order
+          </button>
+        ` : '<span class="helper"><strong>Machine is already out of order.</strong></span>'}
+      </div>
+    </div>
+  `;
+}
+
+function toggleMachineReportGroup(machineNo) {
+  state.reportGroupsExpanded[machineNo] = !state.reportGroupsExpanded[machineNo];
+  renderMachineReports();
+  window.setTimeout(() => scrollToMachineReports(machineNo), 0);
+}
+
+function scrollToMachineReports(machineNo) {
+  const element = document.getElementById(`machineReports_${machineNo}`) || document.getElementById('machineReportsCard');
+  if (element) element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+async function dismissMachineReport(reportId) {
+  const report = ((state.dashboard && state.dashboard.machineReports) || [])
+    .find(item => item.reportId === reportId);
+  if (!report) {
+    showBanner('That report is no longer available.', 'warn');
+    return;
+  }
+
+  const confirmed = await askConfirm(
+    'Dismiss this machine report?',
+    `<strong>Machine ${escapeHtml(String(report.machineNo))}</strong><br><br>${escapeHtml(report.description || '')}<br><br>This closes only this report and does not change the machine status.`,
+    'Dismiss report',
+    'btn-muted'
+  );
+  if (!confirmed) return;
+
+  showBusy('Dismissing report…', `Closing report for Machine ${report.machineNo}.`);
+  google.script.run
+    .withSuccessHandler(response => {
+      hideBusy();
+      applyAdminResponse(response, 'Machine report dismissed.');
+    })
+    .withFailureHandler(handleError)
+    .adminDismissMachineReport(state.adminToken, reportId, 'Dismissed from admin dashboard.');
+}
+
+async function markMachineOutOfOrderFromReport(reportId) {
+  const report = ((state.dashboard && state.dashboard.machineReports) || [])
+    .find(item => item.reportId === reportId);
+  if (!report) {
+    showBanner('That report is no longer available.', 'warn');
+    return;
+  }
+
+  const machineReports = ((state.dashboard && state.dashboard.machineReports) || [])
+    .filter(item => Number(item.machineNo) === Number(report.machineNo));
+
+  const confirmed = await askConfirm(
+    `Mark Machine ${report.machineNo} out of order?`,
+    `This will immediately remove Machine ${escapeHtml(String(report.machineNo))} from automatic assignment and machine changes.<br><br>` +
+      `<strong>All ${escapeHtml(String(machineReports.length))} currently open report${machineReports.length === 1 ? '' : 's'} for this machine will be closed as part of this issue.</strong><br><br>` +
+      `Problem reported: ${escapeHtml(report.description || '')}`,
+    'Mark out of order',
+    'btn-danger'
+  );
+  if (!confirmed) return;
+
+  showBusy('Updating machine…', `Marking Machine ${report.machineNo} out of order and closing its current reports.`);
+  google.script.run
+    .withSuccessHandler(response => {
+      hideBusy();
+      applyAdminResponse(response, `Machine ${report.machineNo} marked out of order.`);
+    })
+    .withFailureHandler(handleError)
+    .adminMarkMachineOutOfOrderFromReport(state.adminToken, reportId, '');
+}
+
+async function markMachineOutOfOrder(machineNo) {
+  const noteElement =
+    document.getElementById(`machineNote_${machineNo}`);
+
+  const note = noteElement
+    ? noteElement.value.trim()
+    : '';
+
+  const machine = (
+    (state.dashboard && state.dashboard.machines) || []
+  ).find(item => item.machineNo === machineNo);
+
+  const affected =
+    machine && machine.openReservationCount
+      ? machine.openReservationCount
+      : 0;
+
+  const reservationWarning = affected > 0
+    ? `<br><br><strong>${affected} existing open reservation${affected === 1 ? '' : 's'} are currently assigned to this machine.</strong> They will not be automatically moved.`
+    : '';
+
+  const openReportCount = machine && machine.openReportCount
+    ? Number(machine.openReportCount)
+    : 0;
+  const reportWarning = openReportCount > 0
+    ? `<br><br><strong>${openReportCount} open problem report${openReportCount === 1 ? '' : 's'} will be closed as part of this machine issue.</strong>`
+    : '';
+
+  const confirmed = await askConfirm(
+    `Mark Machine ${machineNo} out of order?`,
+    `The machine will immediately stop being assigned to new reservations and residents will not be able to switch to it.${reservationWarning}${reportWarning}`,
+    'Mark out of order',
+    'btn-danger'
+  );
+
+  if (!confirmed) return;
+
+  showBusy(
+    'Updating machine…',
+    `Marking Machine ${machineNo} out of order.`
+  );
+
+  google.script.run
+    .withSuccessHandler(response => {
+      hideBusy();
+      applyAdminResponse(
+        response,
+        `Machine ${machineNo} marked out of order.`
+      );
+    })
+    .withFailureHandler(handleError)
+    .adminSetMachineStatus(
+      state.adminToken,
+      machineNo,
+      'OUT_OF_ORDER',
+      note
+    );
+}
+
+async function markMachineWorking(machineNo) {
+  const confirmed = await askConfirm(
+    `Mark Machine ${machineNo} as working?`,
+    'The machine will immediately become available for new automatic assignments and machine changes. Any open reports from the current out-of-order period will be closed, so a later breakdown starts with a clean report inbox.',
+    'Mark working',
+    'btn-ok'
+  );
+
+  if (!confirmed) return;
+
+  showBusy(
+    'Updating machine…',
+    `Marking Machine ${machineNo} as working.`
+  );
+
+  google.script.run
+    .withSuccessHandler(response => {
+      hideBusy();
+      applyAdminResponse(
+        response,
+        `Machine ${machineNo} marked as working.`
+      );
+    })
+    .withFailureHandler(handleError)
+    .adminSetMachineStatus(
+      state.adminToken,
+      machineNo,
+      'WORKING',
+      ''
+    );
+}
 
       function getFilteredResidents() {
         const residents = (state.dashboard && state.dashboard.residents) || [];
