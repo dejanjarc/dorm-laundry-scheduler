@@ -722,6 +722,10 @@
             </p>
           </div>
           <div class="helper" id="machineReportNotificationStatus" style="margin-top:10px;"></div>
+          <div class="actions" style="margin-top:8px;">
+            <button class="btn-secondary" onclick="sendMachineReportTestEmail()">Send test email</button>
+          </div>
+          <div class="helper" id="machineReportEmailTestResult" role="status" aria-live="polite"></div>
           <div class="report-machine-list" id="machineReportList"></div>
         </div>
 
@@ -987,6 +991,24 @@
           })
           .withFailureHandler(handleError)
           .verifyAdminAccess(room, accessCode, adminPin);
+      }
+
+      function sendMachineReportTestEmail() {
+        if (!state.adminToken) return;
+        const resultEl = document.getElementById('machineReportEmailTestResult');
+        resultEl.textContent = 'Sending test email…';
+        showBusy('Sending test email…', 'Checking the configured email delivery.');
+        google.script.run
+          .withSuccessHandler(result => {
+            hideBusy();
+            resultEl.textContent = (result.ok ? 'Success: ' : 'Failed: ') + result.message;
+            showBanner(result.ok ? 'Test email accepted by MailApp.' : 'Test email failed. See the details in Machine reports.', result.ok ? 'ok' : 'error', 6000);
+          })
+          .withFailureHandler(error => {
+            resultEl.textContent = 'Failed: ' + getErrorMessage(error);
+            handleError(error);
+          })
+          .adminSendMachineReportTestEmail(state.adminToken);
       }
 
       function refreshAdminDashboard(silent) {

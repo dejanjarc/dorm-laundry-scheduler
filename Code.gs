@@ -863,10 +863,11 @@ function cancelReservation(room, accessCode, reservationId) {
   return decorateDashboardAuth_(getDashboardData_(resident), resident);
 }
 
-function moveReservation(room, accessCode, reservationId, newSlotId) {
+function moveReservation(room, accessCode, reservationId, newSlotId, preferredMachineNo) {
   ensureSchema_();
   ensureCycleOpenedIfDue_();
   const resident = requireResident_(room, accessCode);
+  preferredMachineNo = normalizePreferredMachineNo_(preferredMachineNo);
 
   let changedDates = [];
   const lock = acquireScriptLockOrThrow_(
@@ -891,6 +892,8 @@ function moveReservation(room, accessCode, reservationId, newSlotId) {
 
     const newSlot = findSlotById_(newSlotId);
     if (!newSlot) throw new Error('Target slot was not found.');
+    if (!currentSlot) throw new Error('Current slot was not found. Your original reservation is unchanged.');
+    if (newSlot.slotId === reservation.slotId) throw new Error('Choose a different time slot.');
 
     if (isSlotConcluded_(newSlot)) {
       throw new Error('Target slot has already concluded and can no longer be selected.');
@@ -898,10 +901,6 @@ function moveReservation(room, accessCode, reservationId, newSlotId) {
 
     if (!newSlot.isOpen || !normalizeBoolean_(getSettingsMap_().booking_open)) {
       throw new Error('Target slot is not open for booking right now.');
-    }
-
-    if (!getNextMachineNoForSlot_(newSlot.slotId)) {
-      throw new Error('Target slot has no working machine available.');
     }
 
     const confirmed = getConfirmedReservationsForResident_(resident.residentId);
@@ -917,10 +916,16 @@ function moveReservation(room, accessCode, reservationId, newSlotId) {
       normalizeDateCellToYmd_(newSlot.slotDate),
     ].filter(Boolean);
 
-    updateReservationStatus_(reservationId, 'moved', `Moved to ${newSlot.slotId}`);
-    SpreadsheetApp.flush();
-    getAllReservations_(true);
-    const created = createReservation_(resident, newSlot, 'confirmed', `Move from ${reservation.slotId}`);
+    // Select while the original reservation still exists. Do not archive/delete
+    // the source before validating the destination (including a preferred machine).
+    let machineNo;
+    try {
+      machineNo = selectAvailableMachineNo_(newSlot, preferredMachineNo);
+    } catch (err) {
+      throw new Error(String(err.message || err).replace('Your slot was not claimed.', 'Your original reservation is unchanged.'));
+    }
+    if (!machineNo) throw new Error('The target slot is already full. Your original reservation is unchanged.');
+    const created = replaceReservationForMove_(resident, reservation, currentSlot, newSlot, machineNo, preferredMachineNo);
     logAudit_(resident.residentId, 'move_reservation', reservationId, `${resident.displayName} moved to ${newSlot.dayLabel} ${newSlot.slotLabel} on machine ${created.machineNo}`);
   } finally {
     try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
@@ -2259,17 +2264,30 @@ function getMachineReportNotificationSettings_() {
   };
 }
 
+// Run manually in the Apps Script editor if MailApp authorization is missing.
+// This diagnostic neither sends email nor modifies the spreadsheet.
+function checkMachineReportEmailAuthorization_() {
+  const quota = MailApp.getRemainingDailyQuota();
+  console.info(`MailApp is authorized. Remaining daily recipient quota: ${quota}.`);
+  return quota;
+}
+
+// Shared by the real report notification and the authenticated admin test.
+// Throw explicit diagnostics so configuration/authorization/quota errors are visible.
+function sendConfiguredMachineReportEmail_(subject, body) {
+  const settings = getMachineReportNotificationSettings_();
+  if (!settings.enabled) throw new Error('Machine report email notifications are disabled in Settings.');
+  const recipients = [...new Set(settings.email.split(',').map(email => email.trim()).filter(Boolean))];
+  if (!recipients.length) throw new Error('Set machine_report_notification_email in Settings first.');
+  const quota = MailApp.getRemainingDailyQuota();
+  if (quota < recipients.length) throw new Error(`MailApp quota is insufficient: ${quota} recipient(s) remaining; ${recipients.length} required.`);
+  MailApp.sendEmail({ to: recipients.join(','), subject, body, name: APP_CONFIG.APP_NAME });
+  return { recipientCount: recipients.length, quotaBeforeSend: quota };
+}
+
 function notifyAdminOfMachineReport_(payload) {
   payload = payload || {};
   try {
-    const notificationSettings = getMachineReportNotificationSettings_();
-    if (!notificationSettings.enabled || !notificationSettings.email) return false;
-    const recipients = notificationSettings.email.split(',').map(email => email.trim()).filter(Boolean);
-    if (!recipients.length) return false;
-    if (MailApp.getRemainingDailyQuota() < recipients.length) {
-      console.warn('Machine report email was skipped because the daily MailApp quota is exhausted.');
-      return false;
-    }
 
     const machineNo = Number(payload.machineNo || 0);
     const resident = payload.resident || {};
@@ -2295,13 +2313,8 @@ function notifyAdminOfMachineReport_(payload) {
       'https://student.sd-lj.si/#/okvare',
     ].join('\n');
 
-    MailApp.sendEmail({
-      to: recipients.join(','),
-      subject: `Laundry Scheduler: Machine ${machineNo} reported`,
-      body,
-      name: APP_CONFIG.APP_NAME,
-    });
-
+    sendConfiguredMachineReportEmail_(`Laundry Scheduler: Machine ${machineNo} reported`, body);
+    console.info(`Machine report email accepted by MailApp: Machine ${machineNo}.`);
     return true;
   } catch (err) {
     console.error('Could not send machine report notification email.', err);
@@ -2789,7 +2802,7 @@ function normalizePreferredMachineNo_(value) {
   return machineNo;
 }
 
-// Shared by new claims and existing-reservation machine changes. Call only
+// Shared by new claims, moves to another slot and existing-reservation machine changes. Call only
 // after acquiring the script lock and loading fresh reservation/machine data.
 // A machine change does not add a reservation or consume another booking place.
 function selectAvailableMachineNo_(slot, preferredMachineNo, reservation) {
@@ -2850,6 +2863,52 @@ function createReservation_(resident, slot, status, note, preferredMachineNo) {
   SpreadsheetApp.flush();
   clearExecutionCaches_();
   bumpDataCacheVersion_();
+  return { reservationId, machineNo };
+}
+
+// Caller holds the script lock and has validated destination capacity and weekly limit.
+// Replace the active row in one write rather than deleting the old booking first.
+function replaceReservationForMove_(resident, reservation, currentSlot, newSlot, machineNo, preferredMachineNo) {
+  const { sheet, values, map } = getReservationsSheetInfo_();
+  const idx = values.findIndex((row, i) => i > 0 && String(getCellValue_(row, map, 'reservation_id') || '').trim() === reservation.reservationId);
+  if (idx < 1 || String(getCellValue_(values[idx], map, 'status')) !== 'confirmed') {
+    throw new Error('Current reservation was not found. Refresh the slots.');
+  }
+  const oldRow = values[idx].slice();
+  const newRow = oldRow.slice();
+  const now = new Date();
+  const reservationId = `RESV-${Utilities.getUuid().split('-')[0].toUpperCase()}`;
+  setCellValue_(newRow, map, 'reservation_id', reservationId);
+  setCellValue_(newRow, map, 'resident_id', resident.residentId);
+  setCellValue_(newRow, map, 'room', resident.room);
+  setCellValue_(newRow, map, 'display_name', resident.displayName);
+  setCellValue_(newRow, map, 'resident_label', formatResidentLabel_(resident.displayName, resident.room));
+  setCellValue_(newRow, map, 'slot_id', newSlot.slotId);
+  setCellValue_(newRow, map, 'week_key', newSlot.weekKey);
+  setCellValue_(newRow, map, 'machine_no', machineNo);
+  setCellValue_(newRow, map, 'created_at', now);
+  setCellValue_(newRow, map, 'updated_at', now);
+  setCellValue_(newRow, map, 'note', `Move from ${reservation.slotId}` + (preferredMachineNo ? ` with preferred machine ${preferredMachineNo}` : ''));
+  setCellValue_(oldRow, map, 'status', 'moved');
+  setCellValue_(oldRow, map, 'updated_at', now);
+  setCellValue_(oldRow, map, 'note', `Moved to ${newSlot.slotId}`);
+  // Recheck the time boundary immediately before committing the replacement.
+  if (isSlotConcluded_(currentSlot) || isSlotChangeLocked_(currentSlot)) {
+    throw new Error('This reservation can no longer be moved. The change cutoff has passed.');
+  }
+  if (isSlotConcluded_(newSlot)) throw new Error('Target slot has already concluded. Your original reservation is unchanged.');
+  sheet.getRange(idx + 1, 1, 1, newRow.length).setValues([newRow]);
+  SpreadsheetApp.flush();
+  clearExecutionCaches_();
+  bumpDataCacheVersion_();
+  // The move is already committed. Archive failure must not make the user
+  // believe the move failed, or trigger a second mutation on retry.
+  try {
+    appendRowsToSheet_(APP_CONFIG.SHEETS.RESERVATIONS_ARCHIVE, [oldRow], APP_CONFIG.HEADERS.RESERVATIONS);
+    SpreadsheetApp.flush();
+  } catch (err) {
+    console.error(`Move ${reservation.reservationId} -> ${reservationId} committed but archiving failed.`, err);
+  }
   return { reservationId, machineNo };
 }
 
@@ -3112,8 +3171,10 @@ function reportMachineProblem(room, accessCode, machineNo, description, reservat
       };
     }
 
-    const firstReport = getMachineStatus_(machineNo) === 'WORKING'
-      && !getOpenMachineReports_().some(report => report.machineNo === machineNo);
+    const machineWorking = getMachineStatus_(machineNo) === 'WORKING';
+    const alreadyReported = getOpenMachineReports_().some(report => report.machineNo === machineNo);
+    const firstReport = machineWorking && !alreadyReported;
+    if (!firstReport) console.info(`Machine ${machineNo}: email suppressed (${!machineWorking ? 'machine not working' : 'existing open report'}).`);
     reportId = appendMachineReport_(resident, machineNo, description, context);
     // Make the report visible before another reporter can acquire the lock.
     SpreadsheetApp.flush();

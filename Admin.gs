@@ -98,6 +98,24 @@ function adminRefreshDashboard(adminToken) {
   return buildAdminEnvelope_(session);
 }
 
+function adminSendMachineReportTestEmail(adminToken) {
+  ensureSchema_();
+  ensureAdminSchema_();
+  requireAdminSession_(adminToken);
+  // No report or machine status is changed by a diagnostic test.
+  try {
+    const result = sendConfiguredMachineReportEmail_(
+      'Laundry Scheduler: test notification',
+      'This is a test of the Dorm 14 laundry scheduler email notification system. No machine report or reservation was created.'
+    );
+    console.info('Admin test notification accepted by MailApp.');
+    return { ok: true, message: `MailApp accepted the test email for ${result.recipientCount} recipient(s). Check your inbox and spam folder.` };
+  } catch (err) {
+    console.error('Admin test notification failed.', err);
+    return { ok: false, message: String(err.message || err) };
+  }
+}
+
 function adminLogout(adminToken) {
   const token = String(adminToken || '').trim();
   if (!token) return { ok: true };
