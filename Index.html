@@ -1561,6 +1561,75 @@
       border-color: var(--accent);
     }
 
+    .move-reservation-summary {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 8px;
+      padding: 14px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      background: var(--bg);
+    }
+
+    .move-reservation-item {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+      padding: 4px 2px;
+    }
+
+    .move-reservation-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--muted);
+    }
+
+    .move-reservation-value {
+      font-size: 16px;
+      font-weight: 700;
+      line-height: 1.4;
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+
+    .move-reservation-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      line-height: 1;
+      color: var(--muted);
+      padding: 4px 0;
+    }
+
+    .move-reservation-explanation {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    @media (max-width: 680px) {
+      .move-reservation-summary {
+        padding: 12px;
+        gap: 6px;
+      }
+
+      .move-reservation-value {
+        font-size: 16px;
+      }
+
+      .move-reservation-explanation {
+        font-size: 14px;
+      }
+
+      #claimOverlay .confirm-actions > button {
+        flex: 1 1 100%;
+        white-space: normal;
+      }
+    }
+
     </style>
   </head>
   <body>
@@ -1586,7 +1655,9 @@
     <div class="confirm-overlay" id="claimOverlay" aria-live="polite" aria-modal="true" role="dialog">
       <div class="confirm-card">
         <h2 class="confirm-title" id="claimTitle">Claim laundry slot</h2>
-        <p class="confirm-text" id="claimText">Choose how the machine should be assigned.</p>
+        <div class="confirm-text" id="claimText">
+          Choose how the machine should be assigned.
+        </div>
 
         <label for="claimAssignmentMode">Machine assignment</label>
         <select id="claimAssignmentMode">
@@ -2827,50 +2898,169 @@
       }
 
       // Claims, moves and machine changes use the same dialog and submit flow.
-      function openMachineSelection({ slot, reservation, moving = false }) {
-        const changing = Boolean(reservation) && !moving;
-        const currentMachine = changing ? Number(reservation.machineNo) : 0;
-        const machineNos = changing ? reservation.availableMachineNos : slot.claimAvailableMachineNos;
-        const free = new Set((Array.isArray(machineNos) ? machineNos : []).map(Number).filter(n => n > 0 && n !== currentMachine));
-        const inventory = getMachineInventory();
-        const hasAlternative = inventory.some(machine => machine.status === 'WORKING' && free.has(machine.machineNo));
-        pendingMachineSelection = { slotId: slot.slotId, reservationId: reservation ? reservation.reservationId : '', mode: moving ? 'move' : changing ? 'change' : 'claim' };
+    function openMachineSelection({ slot, reservation, moving = false }) {
+      const changing = Boolean(reservation) && !moving;
+      const currentMachine = changing ? Number(reservation.machineNo) : 0;
 
-        els.claimTitle.textContent = moving ? 'Move reservation' : changing ? 'Change machine' : 'Claim laundry slot';
-        els.claimText.innerHTML = `<strong>${escapeHtml(formatSlotForMovePrompt(slot))}</strong><br>` + (changing
-          ? `Your current machine is <strong>Machine ${escapeHtml(String(currentMachine))}</strong>. You can switch to another free working machine until the end of your running slot. Your reservation stays in the same time slot.`
-          : moving ? `Replace <strong>${escapeHtml(formatReservationForMovePrompt(reservation))}</strong> with this slot. Your original reservation stays unchanged if the move fails validation. Choose automatic assignment or a preferred machine.` : 'Choose automatic assignment or request a specific machine.');
-        els.claimAutoOption.textContent = changing ? 'Auto-assign another machine' : 'Auto-assign a machine (recommended)';
-        els.claimAssignmentMode.value = changing && hasAlternative ? 'manual' : 'auto';
-        els.claimAssignmentMode.querySelector('option[value="manual"]').disabled = !hasAlternative;
-        els.claimAutoNote.innerHTML = changing
-          ? 'The scheduler will choose the first free working machine other than your current machine. If none is available, your current reservation stays unchanged.'
-          : `<strong>Recommended for busy booking times.</strong> The scheduler assigns the first working and available machine when your ${moving ? 'move' : 'claim'} is saved.`;
-        if (!hasAlternative) els.claimAutoNote.innerHTML += '<br>No machine choices are available in this view. Refresh the slots for updated machine availability.';
-        els.claimChoiceWarning.innerHTML = changing
-          ? '<strong>Your preferred machine is not guaranteed until the change finishes.</strong> If somebody takes it first or it becomes out of order, your existing reservation and machine stay unchanged. Refresh and try another machine, or use auto-assign.'
-          : moving ? '<strong>Your preferred machine is not guaranteed until the move finishes.</strong> If somebody takes it first or it becomes out of order, your original reservation stays unchanged. Refresh and try another machine, or use auto-assign.' : '<strong>Your preferred machine is not guaranteed until the claim finishes.</strong> If somebody takes it first or it becomes out of order, your reservation will not be created. Refresh and try another machine, or use auto-assign.';
+      const machineNos = changing
+        ? reservation.availableMachineNos
+        : slot.claimAvailableMachineNos;
 
-        els.claimMachineSelect.innerHTML = '<option value="" disabled selected>Choose a machine</option>' + inventory.map(machine => {
-          const working = machine.status === 'WORKING';
-          const current = changing && machine.machineNo === currentMachine;
-          const selectable = working && !current && free.has(machine.machineNo);
-          const status = working ? (current ? 'your current machine' : selectable ? 'available' : 'unavailable for this slot')
-            : (machine.status === 'OUT_OF_ORDER' ? 'out of order' : 'status unknown');
-          const label = current && !working ? `your current machine · ${status}` : status;
-          return `<option value="${machine.machineNo}" ${selectable ? '' : 'disabled'}>Machine ${machine.machineNo} — ${label}</option>`;
-        }).join('');
-        pendingMachineSelection.hasAlternative = hasAlternative;
-        els.claimAssignmentMode.onchange = updateMachineSelectionMode;
-        els.claimMachineSelect.onchange = updateMachineSelectionMode;
-        els.claimCancelBtn.onclick = closeMachineSelection;
-        els.claimOkBtn.onclick = confirmMachineSelection;
-        updateMachineSelectionMode();
-        els.claimOverlay.classList.add('show');
-        const card = els.claimOverlay.querySelector('.confirm-card');
-        if (card) card.scrollTop = 0;
-        els.claimOverlay.scrollTop = 0;
+      const free = new Set(
+        (Array.isArray(machineNos) ? machineNos : [])
+          .map(Number)
+          .filter(n => n > 0 && n !== currentMachine)
+      );
+
+      const inventory = getMachineInventory();
+
+      const hasAlternative = inventory.some(
+        machine =>
+          machine.status === 'WORKING' &&
+          free.has(machine.machineNo)
+      );
+
+      pendingMachineSelection = {
+        slotId: slot.slotId,
+        reservationId: reservation ? reservation.reservationId : '',
+        mode: moving ? 'move' : changing ? 'change' : 'claim'
+      };
+
+      els.claimTitle.textContent = moving
+        ? 'Move reservation'
+        : changing
+          ? 'Change machine'
+          : 'Claim laundry slot';
+
+      if (moving) {
+        els.claimText.innerHTML = `
+          <div class="move-reservation-summary">
+            <div class="move-reservation-item">
+              <span class="move-reservation-label">
+                Current reservation
+              </span>
+              <strong class="move-reservation-value">
+                ${escapeHtml(formatReservationForMovePrompt(reservation))}
+              </strong>
+            </div>
+
+            <div class="move-reservation-arrow" aria-hidden="true">
+              &#8595;
+            </div>
+
+            <div class="move-reservation-item">
+              <span class="move-reservation-label">
+                New reservation
+              </span>
+              <strong class="move-reservation-value">
+                ${escapeHtml(formatSlotForMovePrompt(slot))}
+              </strong>
+            </div>
+          </div>
+
+          <p class="move-reservation-explanation">
+            Your original reservation stays unchanged if the move
+            fails validation. Choose automatic assignment or a
+            preferred machine.
+          </p>
+        `;
+      } else {
+        els.claimText.innerHTML = `
+          <strong>${escapeHtml(formatSlotForMovePrompt(slot))}</strong><br>
+          ${
+            changing
+              ? `Your current machine is
+                <strong>Machine ${escapeHtml(String(currentMachine))}</strong>.
+                You can switch to another free working machine until
+                the end of your running slot. Your reservation stays
+                in the same time slot.`
+              : 'Choose automatic assignment or request a specific machine.'
+          }
+        `;
       }
+
+      els.claimAutoOption.textContent = changing
+        ? 'Auto-assign another machine'
+        : 'Auto-assign a machine (recommended)';
+
+      els.claimAssignmentMode.value =
+        changing && hasAlternative ? 'manual' : 'auto';
+
+      els.claimAssignmentMode
+        .querySelector('option[value="manual"]')
+        .disabled = !hasAlternative;
+
+      els.claimAutoNote.innerHTML = changing
+        ? 'The scheduler will choose the first free working machine other than your current machine. If none is available, your current reservation stays unchanged.'
+        : `<strong>Recommended for busy booking times.</strong> The scheduler assigns the first working and available machine when your ${moving ? 'move' : 'claim'} is saved.`;
+
+      if (!hasAlternative) {
+        els.claimAutoNote.innerHTML +=
+          '<br>No machine choices are available in this view. Refresh the slots for updated machine availability.';
+      }
+
+      els.claimChoiceWarning.innerHTML = changing
+        ? '<strong>Your preferred machine is not guaranteed until the change finishes.</strong> If somebody takes it first or it becomes out of order, your existing reservation and machine stay unchanged. Refresh and try another machine, or use auto-assign.'
+        : moving
+          ? '<strong>Your preferred machine is not guaranteed until the move finishes.</strong> If somebody takes it first or it becomes out of order, your original reservation stays unchanged. Refresh and try another machine, or use auto-assign.'
+          : '<strong>Your preferred machine is not guaranteed until the claim finishes.</strong> If somebody takes it first or it becomes out of order, your reservation will not be created. Refresh and try another machine, or use auto-assign.';
+
+      els.claimMachineSelect.innerHTML =
+        '<option value="" disabled selected>Choose a machine</option>' +
+        inventory.map(machine => {
+          const working = machine.status === 'WORKING';
+
+          const current =
+            changing && machine.machineNo === currentMachine;
+
+          const selectable =
+            working && !current && free.has(machine.machineNo);
+
+          const status = working
+            ? (
+                current
+                  ? 'your current machine'
+                  : selectable
+                    ? 'available'
+                    : 'unavailable for this slot'
+              )
+            : (
+                machine.status === 'OUT_OF_ORDER'
+                  ? 'out of order'
+                  : 'status unknown'
+              );
+
+          const label = current && !working
+            ? `your current machine · ${status}`
+            : status;
+
+          return `
+            <option
+              value="${machine.machineNo}"
+              ${selectable ? '' : 'disabled'}
+            >
+              Machine ${machine.machineNo} — ${label}
+            </option>
+          `;
+        }).join('');
+
+      pendingMachineSelection.hasAlternative = hasAlternative;
+
+      els.claimAssignmentMode.onchange = updateMachineSelectionMode;
+      els.claimMachineSelect.onchange = updateMachineSelectionMode;
+      els.claimCancelBtn.onclick = closeMachineSelection;
+      els.claimOkBtn.onclick = confirmMachineSelection;
+
+      updateMachineSelectionMode();
+
+      els.claimOverlay.classList.add('show');
+
+      const card = els.claimOverlay.querySelector('.confirm-card');
+
+      if (card) card.scrollTop = 0;
+
+      els.claimOverlay.scrollTop = 0;
+    }
 
       function updateMachineSelectionMode() {
         const selection = pendingMachineSelection;

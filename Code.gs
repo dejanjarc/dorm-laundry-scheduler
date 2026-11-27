@@ -2264,14 +2264,6 @@ function getMachineReportNotificationSettings_() {
   };
 }
 
-// Run manually in the Apps Script editor if MailApp authorization is missing.
-// This diagnostic neither sends email nor modifies the spreadsheet.
-function checkMachineReportEmailAuthorization_() {
-  const quota = MailApp.getRemainingDailyQuota();
-  console.info(`MailApp is authorized. Remaining daily recipient quota: ${quota}.`);
-  return quota;
-}
-
 // Shared by the real report notification and the authenticated admin test.
 // Throw explicit diagnostics so configuration/authorization/quota errors are visible.
 function sendConfiguredMachineReportEmail_(subject, body) {
