@@ -623,11 +623,18 @@ function getAdminDashboardData_() {
     openMachineReports: getOpenMachineReports_().length,
   };
 
+  const reportNotificationSettings = getMachineReportNotificationSettings_();
+
   return {
     generatedAtIso: new Date().toISOString(),
     stats,
     machines: buildAdminMachineCards_(),
     machineReports: buildAdminMachineReportCards_(),
+    machineReportNotifications: {
+      enabled: reportNotificationSettings.enabled,
+      email: reportNotificationSettings.email,
+      configured: Boolean(reportNotificationSettings.email),
+    },
     residents,
   };
 }
@@ -683,6 +690,8 @@ function adminSetMachineStatus(adminToken, machineNo, status, note) {
   );
 
   try {
+    _MACHINES_CACHE = null;
+    _MACHINE_REPORTS_CACHE = null;
     const result = setMachineStatusLocked_(machineNo, status, note);
 
     if (status === 'OUT_OF_ORDER') {
@@ -712,10 +721,11 @@ function adminSetMachineStatus(adminToken, machineNo, status, note) {
         (note ? ` | ${note}` : '')
     );
 
+    SpreadsheetApp.flush();
     const freshSession = requireAdminSession_(session.token);
     return buildAdminEnvelope_(freshSession);
   } finally {
-    lock.releaseLock();
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
   }
 }
 
@@ -734,6 +744,8 @@ function adminDismissMachineReport(adminToken, reportId, resolutionNote) {
   );
 
   try {
+    _MACHINES_CACHE = null;
+    _MACHINE_REPORTS_CACHE = null;
     const report = findMachineReportById_(reportId);
     if (!report) throw new Error('Machine report was not found.');
     if (report.status !== APP_CONFIG.MACHINE_REPORT_STATUSES.OPEN) {
@@ -755,10 +767,11 @@ function adminDismissMachineReport(adminToken, reportId, resolutionNote) {
         (resolutionNote ? ` | ${resolutionNote}` : '')
     );
 
+    SpreadsheetApp.flush();
     const freshSession = requireAdminSession_(session.token);
     return buildAdminEnvelope_(freshSession);
   } finally {
-    lock.releaseLock();
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
   }
 }
 
@@ -777,6 +790,8 @@ function adminMarkMachineOutOfOrderFromReport(adminToken, reportId, note) {
   );
 
   try {
+    _MACHINES_CACHE = null;
+    _MACHINE_REPORTS_CACHE = null;
     const report = findMachineReportById_(reportId);
     if (!report) throw new Error('Machine report was not found.');
     if (report.status !== APP_CONFIG.MACHINE_REPORT_STATUSES.OPEN) {
@@ -804,10 +819,11 @@ function adminMarkMachineOutOfOrderFromReport(adminToken, reportId, note) {
         (machineNote ? ` | ${machineNote}` : '')
     );
 
+    SpreadsheetApp.flush();
     const freshSession = requireAdminSession_(session.token);
     return buildAdminEnvelope_(freshSession);
   } finally {
-    lock.releaseLock();
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
   }
 }
 

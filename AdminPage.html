@@ -721,6 +721,7 @@
               for the machine to be repaired.
             </p>
           </div>
+          <div class="helper" id="machineReportNotificationStatus" style="margin-top:10px;"></div>
           <div class="report-machine-list" id="machineReportList"></div>
         </div>
 
@@ -773,6 +774,7 @@
         dashboardSubtitle: document.getElementById('dashboardSubtitle'),
         statsGrid: document.getElementById('statsGrid'),
         machineGrid: document.getElementById('machineGrid'),
+        machineReportNotificationStatus: document.getElementById('machineReportNotificationStatus'),
         machineReportList: document.getElementById('machineReportList'),
         residentList: document.getElementById('residentList'),
         searchInput: document.getElementById('searchInput'),
@@ -1150,6 +1152,17 @@
 function renderMachineReports() {
   const reports = (state.dashboard && state.dashboard.machineReports) || [];
   const machines = (state.dashboard && state.dashboard.machines) || [];
+  const notification = (state.dashboard && state.dashboard.machineReportNotifications) || {};
+
+  if (els.machineReportNotificationStatus) {
+    if (!notification.enabled) {
+      els.machineReportNotificationStatus.innerHTML = '<strong>Email alerts are disabled.</strong> Set <code>machine_report_email_notifications</code> to TRUE in Settings to enable them.';
+    } else if (!notification.configured || !notification.email) {
+      els.machineReportNotificationStatus.innerHTML = '<strong>⚠ Email alerts are not configured.</strong> Add your email to <code>machine_report_notification_email</code> in Settings. One email is attempted for the first open report on a working machine.';
+    } else {
+      els.machineReportNotificationStatus.innerHTML = `<strong>✉ Email alerts:</strong> ${escapeHtml(notification.email)} · first open report on a working machine. Additional reports for the same issue do not send another email.`;
+    }
+  }
 
   if (!reports.length) {
     els.machineReportList.innerHTML = `

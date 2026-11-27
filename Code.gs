@@ -5,7 +5,7 @@ const APP_CONFIG = {
   TZ: 'Europe/Ljubljana',
   SPREADSHEET_ID_KEY: 'SPREADSHEET_ID',
   SCHEMA_VERSION_KEY: 'SCHEMA_VERSION',
-  SCHEMA_VERSION: 'dorm14-fresh-v4',
+  SCHEMA_VERSION: 'dorm14-fresh-v5',
   PUBLIC_BOARD_SIGNATURE_KEY: 'PUBLIC_BOARD_SIGNATURE',
   PUBLIC_BOARD_DIRTY_KEY: 'PUBLIC_BOARD_DIRTY',
   PUBLIC_BOARD_TRIGGER_INSTALLED_KEY: 'PUBLIC_BOARD_TRIGGER_INSTALLED',
@@ -779,10 +779,11 @@ function selfResetAccessCode(room, displayName, recoveryKey) {
   }
 }
 
-function claimSlot(room, accessCode, slotId) {
+function claimSlot(room, accessCode, slotId, preferredMachineNo) {
   ensureSchema_();
   ensureCycleOpenedIfDue_();
   const resident = requireResident_(room, accessCode);
+  preferredMachineNo = normalizePreferredMachineNo_(preferredMachineNo);
 
   let slot;
   const lock = acquireScriptLockOrThrow_(
@@ -792,6 +793,7 @@ function claimSlot(room, accessCode, slotId) {
   try {
     // Reload from Sheets only AFTER the script lock is acquired.
     // Another request may have created a reservation while we waited.
+    clearExecutionCaches_();
     getAllReservations_(true);
     slot = findSlotById_(slotId);
     if (!slot) throw new Error('Selected slot was not found.');
@@ -803,10 +805,6 @@ function claimSlot(room, accessCode, slotId) {
     if (!slot.isOpen || !normalizeBoolean_(getSettingsMap_().booking_open)) {
       throw new Error('This slot is not open for booking right now.');
     }
-    if (!getNextMachineNoForSlot_(slot.slotId)) {
-      throw new Error('This slot has no working machine available.');
-    }
-
     const existingForWeek = getConfirmedReservationsForResident_(resident.residentId)
       .filter(r => r.weekKey === slot.weekKey);
 
@@ -814,7 +812,10 @@ function claimSlot(room, accessCode, slotId) {
       throw new Error('You already used or reserved a laundry slot in this week.');
     }
 
-    const created = createReservation_(resident, slot, 'confirmed', 'Claimed from web app');
+    const claimNote = preferredMachineNo
+      ? `Claimed from web app with preferred machine ${preferredMachineNo}`
+      : 'Claimed from web app';
+    const created = createReservation_(resident, slot, 'confirmed', claimNote, preferredMachineNo);
     logAudit_(resident.residentId, 'claim_slot', slot.slotId, `${resident.displayName} claimed ${slot.dayLabel} ${slot.slotLabel} on machine ${created.machineNo}`);
   } finally {
     lock.releaseLock();
@@ -836,6 +837,8 @@ function cancelReservation(room, accessCode, reservationId) {
     'Too many residents are changing reservations right now. Please retry in a moment.'
   );
   try {
+    clearExecutionCaches_();
+    getAllReservations_(true);
     const reservation = findReservationById_(reservationId);
     if (!reservation || reservation.status !== 'confirmed') throw new Error('Reservation was not found.');
     if (reservation.residentId !== resident.residentId) throw new Error('You can only cancel your own reservation.');
@@ -852,7 +855,7 @@ function cancelReservation(room, accessCode, reservationId) {
     updateReservationStatus_(reservationId, 'cancelled', 'Cancelled by resident');
     logAudit_(resident.residentId, 'cancel_reservation', reservationId, `${resident.displayName} cancelled reservation`);
   } finally {
-    lock.releaseLock();
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
   }
 
   touchResidentActivity_(resident.residentId, { force: true });
@@ -872,6 +875,7 @@ function moveReservation(room, accessCode, reservationId, newSlotId) {
   );
   try {
     // Do not decide on the old reservation or target capacity from a stale cache.
+    clearExecutionCaches_();
     getAllReservations_(true);
     const reservation = findReservationById_(reservationId);
     if (!reservation || reservation.status !== 'confirmed') throw new Error('Current reservation was not found.');
@@ -914,10 +918,12 @@ function moveReservation(room, accessCode, reservationId, newSlotId) {
     ].filter(Boolean);
 
     updateReservationStatus_(reservationId, 'moved', `Moved to ${newSlot.slotId}`);
+    SpreadsheetApp.flush();
+    getAllReservations_(true);
     const created = createReservation_(resident, newSlot, 'confirmed', `Move from ${reservation.slotId}`);
     logAudit_(resident.residentId, 'move_reservation', reservationId, `${resident.displayName} moved to ${newSlot.dayLabel} ${newSlot.slotLabel} on machine ${created.machineNo}`);
   } finally {
-    lock.releaseLock();
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
   }
 
   touchResidentActivity_(resident.residentId, { force: true });
@@ -1071,6 +1077,9 @@ function getDashboardData_(resident) {
       operationalCapacity: slot.operationalCapacity,
       reservedCount: slot.reservedCount,
       availableCount: slot.availableCount,
+      claimAvailableMachineNos: slot.availableCount > 0
+        ? getAvailableMachineNumbersForSlot_(slot.slotId, '')
+        : [],
       isOpen: bookingOpen && slot.isOpen,
       isMine: ownIsCurrentSlot,
       ownReservationId: ownReservation ? ownReservation.reservationId : '',
@@ -1171,7 +1180,7 @@ function getDashboardData_(resident) {
 
 function getDashboardDataCached_(resident) {
   const cache = CacheService.getScriptCache();
-  const key = buildCacheKey_('dashboard', resident && resident.residentId ? resident.residentId : 'anonymous');
+  const key = buildCacheKey_('dashboard-v5', resident && resident.residentId ? resident.residentId : 'anonymous');
   const cached = cache ? cache.get(key) : '';
 
   if (cached) {
@@ -1846,6 +1855,8 @@ function writeDefaultSettings_(ss) {
     ['simulation_open_at', '', 'Optional exact datetime override for test copies, format YYYY-MM-DDTHH:mm:ss'],
     ['carryover_finalize_at', '', 'Internal exact datetime used to end carryover display after a cycle opens'],
     ['opening_policy', 'Every 2 weeks on rollover Sunday at 19:00, next cycle opens for the upcoming Monday', 'Notes only'],
+    ['machine_report_email_notifications', 'TRUE', 'Send one email for the first open report of a new issue on a working machine'],
+    ['machine_report_notification_email', '', 'Email recipient(s) for new machine issue alerts; comma-separated addresses are allowed'],
   ];
 
   const existing = sheet.getDataRange().getValues();
@@ -2233,6 +2244,69 @@ function getOpenMachineReportCountsByMachine_() {
   });
 
   return counts;
+}
+
+function getMachineReportNotificationSettings_() {
+  const settings = getSettingsMap_();
+  const enabledRaw = settings.machine_report_email_notifications;
+  const enabled = enabledRaw === undefined || enabledRaw === null || enabledRaw === ''
+    ? true
+    : normalizeBoolean_(enabledRaw);
+
+  return {
+    enabled,
+    email: String(settings.machine_report_notification_email || '').trim(),
+  };
+}
+
+function notifyAdminOfMachineReport_(payload) {
+  payload = payload || {};
+  try {
+    const notificationSettings = getMachineReportNotificationSettings_();
+    if (!notificationSettings.enabled || !notificationSettings.email) return false;
+    const recipients = notificationSettings.email.split(',').map(email => email.trim()).filter(Boolean);
+    if (!recipients.length) return false;
+    if (MailApp.getRemainingDailyQuota() < recipients.length) {
+      console.warn('Machine report email was skipped because the daily MailApp quota is exhausted.');
+      return false;
+    }
+
+    const machineNo = Number(payload.machineNo || 0);
+    const resident = payload.resident || {};
+    const description = String(payload.description || '').trim();
+    const openReportCount = Math.max(1, Number(payload.openReportCount || 1));
+
+    let adminUrl = '';
+    try {
+      adminUrl = getAppPageUrl('admin');
+    } catch (err) {}
+
+    const body = [
+      `Machine ${machineNo} has received the first report of a new issue cycle.`,
+      '',
+      `Reporter: ${resident.displayName || 'Resident'} · room ${resident.room || '—'}`,
+      `Problem: ${description || 'No description provided.'}`,
+      `Open reports for this machine when submitted: ${openReportCount}`,
+      '',
+      'Review the report in the Laundry Scheduler admin dashboard.',
+      adminUrl || '',
+      '',
+      'This scheduler report is internal only. Maintenance still needs to be reported in MojŠtudent:',
+      'https://student.sd-lj.si/#/okvare',
+    ].join('\n');
+
+    MailApp.sendEmail({
+      to: recipients.join(','),
+      subject: `Laundry Scheduler: Machine ${machineNo} reported`,
+      body,
+      name: APP_CONFIG.APP_NAME,
+    });
+
+    return true;
+  } catch (err) {
+    console.error('Could not send machine report notification email.', err);
+    return false;
+  }
 }
 
 function appendMachineReport_(resident, machineNo, description, context) {
@@ -2705,7 +2779,33 @@ function appendNote_(existingValue, noteToAppend) {
 // Reservations
 // ---------------------------
 
-function createReservation_(resident, slot, status, note) {
+function normalizePreferredMachineNo_(value) {
+  if (value === undefined || value === null || value === '' || value === 0 || value === '0') return 0;
+  if (typeof value !== 'number' && typeof value !== 'string') throw new Error('Selected machine is invalid.');
+  const machineNo = Number(value);
+  if (!Number.isInteger(machineNo) || machineNo < 1 || machineNo > APP_CONFIG.SLOT_CAPACITY) {
+    throw new Error('Selected machine is invalid.');
+  }
+  return machineNo;
+}
+
+// Called under the same script lock as claimSlot. Never silently fall back.
+function selectClaimMachineNo_(slotId, preferredMachineNo) {
+  if (!preferredMachineNo) return getNextMachineNoForSlot_(slotId);
+  const workingMachines = getWorkingMachineNumbers_();
+  if (!workingMachines.includes(preferredMachineNo)) {
+    throw new Error(`Machine ${preferredMachineNo} is not currently available. Your slot was not claimed. Refresh the slots and try again.`);
+  }
+  const availableMachines = getAvailableMachineNumbersForSlot_(slotId, '');
+  if (!availableMachines.includes(preferredMachineNo)) {
+    throw new Error(`Machine ${preferredMachineNo} was just claimed by another resident. Your slot was not claimed. Refresh the slots and choose another machine, or use auto-assign.`);
+  }
+  // Respect operational capacity even when an existing resident is on a broken machine.
+  if (getBookableMachineCountForSlot_(slotId) <= 0) return 0;
+  return preferredMachineNo;
+}
+
+function createReservation_(resident, slot, status, note, preferredMachineNo) {
   const { sheet, map } = getSheetRef_(APP_CONFIG.SHEETS.RESERVATIONS);
   const now = new Date();
   const reservationId = `RESV-${Utilities.getUuid().split('-')[0].toUpperCase()}`;
@@ -2713,7 +2813,7 @@ function createReservation_(resident, slot, status, note) {
     .some(r => r.weekKey === slot.weekKey)) {
     throw new Error('You already used or reserved a laundry slot in this week.');
   }
-  const machineNo = status === 'confirmed' ? getNextMachineNoForSlot_(slot.slotId) : 0;
+  const machineNo = status === 'confirmed' ? selectClaimMachineNo_(slot.slotId, normalizePreferredMachineNo_(preferredMachineNo)) : 0;
   if (status === 'confirmed' && !machineNo) {
     throw new Error('This slot is already full. Please refresh and choose another slot.');
   }
@@ -2963,6 +3063,7 @@ function reportMachineProblem(room, accessCode, machineNo, description, reservat
 
   let reportId = '';
   let context = {};
+  let notifyNewIssue = false;
 
   const lock = acquireScriptLockOrThrow_(
     APP_CONFIG.MUTATION_LOCK_TIMEOUT_MS,
@@ -2970,7 +3071,11 @@ function reportMachineProblem(room, accessCode, machineNo, description, reservat
   );
 
   try {
+    // Decide from fresh machine/report state while holding the same lock as admin actions.
+    _MACHINES_CACHE = null;
+    _MACHINE_REPORTS_CACHE = null;
     if (reservationId) {
+      getAllReservations_(true);
       const reservation = findReservationById_(reservationId);
 
       if (!reservation || reservation.residentId !== resident.residentId) {
@@ -2987,7 +3092,12 @@ function reportMachineProblem(room, accessCode, machineNo, description, reservat
       };
     }
 
+    const firstReport = getMachineStatus_(machineNo) === 'WORKING'
+      && !getOpenMachineReports_().some(report => report.machineNo === machineNo);
     reportId = appendMachineReport_(resident, machineNo, description, context);
+    // Make the report visible before another reporter can acquire the lock.
+    SpreadsheetApp.flush();
+    notifyNewIssue = firstReport;
 
     const contextText = context.reservationId
       ? ` | reservation ${context.reservationId}`
@@ -3001,6 +3111,12 @@ function reportMachineProblem(room, accessCode, machineNo, description, reservat
     );
   } finally {
     lock.releaseLock();
+  }
+
+  // One best-effort attempt per issue. No mail calls while holding the lock.
+  // A failed email never blocks reporting or changes the machine status.
+  if (notifyNewIssue) {
+    notifyAdminOfMachineReport_({ machineNo, resident, description, openReportCount: 1 });
   }
 
   touchResidentActivity_(resident.residentId, { force: true });
@@ -3023,6 +3139,8 @@ function changeReservationMachine(room, accessCode, reservationId, newMachineNo)
   );
 
   try {
+    clearExecutionCaches_();
+    getAllReservations_(true);
     const reservation = findReservationById_(reservationId);
     if (!reservation || reservation.status !== 'confirmed') {
       throw new Error('Reservation was not found.');
@@ -3075,7 +3193,7 @@ function changeReservationMachine(room, accessCode, reservationId, newMachineNo)
       `${resident.displayName} changed machine from ${currentMachineNo} to ${newMachineNo}`
     );
   } finally {
-    lock.releaseLock();
+    try { SpreadsheetApp.flush(); } finally { lock.releaseLock(); }
   }
 
   touchResidentActivity_(resident.residentId, { force: true });

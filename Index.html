@@ -1496,6 +1496,45 @@
       color: #714d00;
     }
 
+    .machine-inventory {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 8px;
+      align-items: center;
+    }
+    .machine-inventory-item {
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      padding: 6px 9px;
+      font-size: 13px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+    .machine-inventory-item.working { background: var(--ok-bg); color: var(--ok); }
+    .machine-inventory-item.broken { background: var(--danger-bg); color: var(--danger); }
+    #claimOverlay .confirm-actions { margin-top: 16px; }
+    #claimOverlay select { font-size: 16px; }
+    .claim-choice-note {
+      margin-top: 8px;
+      padding: 11px 12px;
+      border-radius: 12px;
+      background: var(--info-bg);
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 13px;
+    }
+
+    .claim-choice-warning {
+      margin-top: 10px;
+      padding: 11px 12px;
+      border: 1px solid #f0ddb2;
+      border-radius: 12px;
+      background: var(--warn-bg);
+      color: var(--warn);
+      line-height: 1.45;
+      font-size: 13px;
+    }
+
     select {
       width: 100%;
       padding: 13px 14px;
@@ -1529,6 +1568,37 @@
         <div class="confirm-actions">
           <button class="btn-muted" id="confirmCancelBtn">Go back</button>
           <button class="btn-danger" id="confirmOkBtn">Confirm</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="confirm-overlay" id="claimOverlay" aria-live="polite" aria-modal="true" role="dialog">
+      <div class="confirm-card">
+        <h2 class="confirm-title" id="claimTitle">Claim laundry slot</h2>
+        <p class="confirm-text" id="claimText">Choose how the machine should be assigned.</p>
+
+        <label for="claimAssignmentMode">Machine assignment</label>
+        <select id="claimAssignmentMode">
+          <option value="auto">Auto-assign a machine (recommended)</option>
+          <option value="manual">Choose an available machine</option>
+        </select>
+
+        <div class="claim-choice-note" id="claimAutoNote">
+          <strong>Recommended for busy booking times.</strong> The scheduler will atomically assign the first working and available machine when your claim is saved.
+        </div>
+
+        <div id="claimManualFields" class="hidden" style="margin-top:14px;">
+          <label for="claimMachineSelect">Preferred machine</label>
+          <select id="claimMachineSelect"></select>
+          <div class="claim-choice-warning">
+            <strong>Your preferred machine is not guaranteed until the claim finishes.</strong>
+            If another resident claims that machine first, or it is marked out of order, your reservation will not be created. Refresh and try another machine, or use auto-assign.
+          </div>
+        </div>
+
+        <div class="confirm-actions">
+          <button class="btn-muted" id="claimCancelBtn">Go back</button>
+          <button class="btn-primary" id="claimOkBtn">Claim slot</button>
         </div>
       </div>
     </div>
@@ -1604,6 +1674,8 @@
         <div class="confirm-text help-body">
           <div><strong>How the scheduler works</strong></div>
           <div>• You may hold <b>one</b> laundry reservation <b>per week</b>.</div>
+          <div>• When claiming, <b>auto-assign is recommended</b>, especially at busy times. You may optionally choose a currently available working machine, but it is only guaranteed once your claim is successfully saved. Out-of-order machines cannot be selected. The machine status list above Available slots shows current operational status.</div>
+          <div>• If somebody takes your preferred machine first or it becomes out of order, <b>your reservation is not created</b>; refresh and try another machine or use auto-assign.</div>
           <div>• You can move or cancel your reservation <b>only until one hour after the slot starts</b>.</div>
           <div>• If you want to <b>switch the machine</b>, you can do that once <b>your slot starts running</b>.</div>
           <div>• You can <b>report a machine problem at any time</b>, even if you are not currently using that machine.</div>
@@ -1713,6 +1785,8 @@
             <div class="helper" style="display:grid; gap:10px;">
               <div><strong>How the scheduler works</strong></div>
               <div>• You may hold <b>one</b> laundry reservation <b>per week</b>.</div>
+              <div>• When claiming, <b>auto-assign is recommended</b>, especially at busy times. You may optionally choose a currently available working machine, but it is only guaranteed once your claim is successfully saved. Out-of-order machines cannot be selected. The machine status list above Available slots shows current operational status.</div>
+              <div>• If somebody takes your preferred machine first or it becomes out of order, <b>your reservation is not created</b>; refresh and try another machine or use auto-assign.</div>
               <div>• You can move or cancel your reservation <b>only until one hour after the slot starts</b>.</div>
               <div>• If you want to <b>switch the machine</b>, you can do that once <b>your slot starts running</b>.</div>
               <div>• You can <b>report a machine problem at any time</b>, even if you are not currently using that machine.</div>
@@ -1839,7 +1913,7 @@
             <div class="card stack" id="reservationsCard">
               <div>
                 <h2 class="section-title">Your current reservations</h2>
-                <p class="helper">You can cancel your slot or move it into another free slot of the same week. Each reservation is assigned a machine number automatically.</p>
+                <p class="helper">You can cancel your slot or move it into another free slot of the same week. Auto-assignment is the recommended default, but you can also choose a preferred available machine while claiming.</p>
               </div>
               <div class="reservation-list" id="reservationList"></div>
             </div>
@@ -1851,6 +1925,11 @@
                 <h2 class="section-title">Available slots</h2>
                 <p class="helper" id="scheduleHelper">Loading active cycle…</p>
               </div>
+            </div>
+
+            <div>
+              <div class="helper" style="margin-bottom:6px;"><strong>Machine status</strong> · Working does not necessarily mean free for a particular slot.</div>
+              <div class="machine-inventory" id="machineInventory" aria-live="polite"></div>
             </div>
 
             <div class="schedule-refresh-bar">
@@ -1883,13 +1962,14 @@
       let refreshRequestInFlight = false;
       let refreshCooldownUntilMs = 0;
       let refreshCooldownTimer = null;
+      let pendingClaimSlotId = '';
       let pendingMachineReservationId = null;
       let pendingReportReservationId = '';
 
       const STORAGE_KEYS = {
         auth: 'dormLaundryAuth',
-        dashboard: 'dormLaundryDashboard',
-        refreshCooldownUntil: 'dormLaundryRefreshCooldownUntil',
+        dashboard: 'dormLaundryDashboardV5',
+        refreshCooldownUntil: 'dormLaundryRefreshCooldownUntilV5',
       };
 
       const els = {
@@ -1930,6 +2010,7 @@
         reservationList: document.getElementById('reservationList'),
         dayGrid: document.getElementById('dayGrid'),
         scheduleHelper: document.getElementById('scheduleHelper'),
+        machineInventory: document.getElementById('machineInventory'),
         busyOverlay: document.getElementById('busyOverlay'),
         busyTitle: document.getElementById('busyTitle'),
         busyText: document.getElementById('busyText'),
@@ -1952,6 +2033,15 @@
         helpCloseBtn: document.getElementById('helpCloseBtn'),
         scheduleRefreshBar: document.querySelector('.schedule-refresh-bar'),
         refreshDashboardBtn: document.getElementById('refreshDashboardBtn'),
+        claimOverlay: document.getElementById('claimOverlay'),
+        claimTitle: document.getElementById('claimTitle'),
+        claimText: document.getElementById('claimText'),
+        claimAssignmentMode: document.getElementById('claimAssignmentMode'),
+        claimAutoNote: document.getElementById('claimAutoNote'),
+        claimManualFields: document.getElementById('claimManualFields'),
+        claimMachineSelect: document.getElementById('claimMachineSelect'),
+        claimCancelBtn: document.getElementById('claimCancelBtn'),
+        claimOkBtn: document.getElementById('claimOkBtn'),
         machineOverlay: document.getElementById('machineOverlay'),
         machineTitle: document.getElementById('machineTitle'),
         machineText: document.getElementById('machineText'),
@@ -2053,7 +2143,7 @@
             showDashboardView();
           }
 
-          if (refreshCooldownUntilMs > Date.now()) {
+          if (state.dashboard && refreshCooldownUntilMs > Date.now()) {
             showBanner(
               `Using saved data. Refresh available in ${Math.ceil((refreshCooldownUntilMs - Date.now()) / 1000)}s.`,
               'info',
@@ -2691,28 +2781,106 @@
       }
 
       async function claim(slotId) {
-      const data = state.dashboard;
-      if (!data || !data.groupedDays) {
-        act('claimSlot', slotId);
-        return;
+        const data = state.dashboard;
+        if (!data || !data.groupedDays) {
+          showNotice('Refresh required', 'Refresh the slots before claiming.', { onClose: () => refreshDashboard({ force: true }) });
+          return;
+        }
+
+        const allSlots = [];
+        Object.values(data.groupedDays).forEach(slots => (slots || []).forEach(slot => allSlots.push(slot)));
+        const slot = allSlots.find(item => item.slotId === slotId);
+
+        if (slot && isSlotRunning(slot) && !isDecisionWindowOpen(slot)) {
+          const sure = await askConfirm(
+            'Final claim?',
+            'This slot is already past the first hour. If you claim it now, you will not be able to move or cancel it later.',
+            'Continue',
+            'btn-danger'
+          );
+          if (!sure) return;
+        }
+
+        if (!slot) {
+          showNotice('Refresh required', 'This slot is missing from the current view. Refresh the slots before claiming.', { onClose: () => refreshDashboard({ force: true }) });
+          return;
+        }
+
+        openClaimPicker(slot);
       }
 
-      const allSlots = [];
-      Object.values(data.groupedDays).forEach(slots => (slots || []).forEach(slot => allSlots.push(slot)));
-      const slot = allSlots.find(item => item.slotId === slotId);
+      function openClaimPicker(slot) {
+        if (!slot || !slot.slotId) return;
 
-      if (slot && isSlotRunning(slot) && !isDecisionWindowOpen(slot)) {
-        const sure = await askConfirm(
-          'Final claim?',
-          'This slot is already past the first hour. If you claim it now, you will not be able to move or cancel it later.',
-          'Claim anyway',
-          'btn-danger'
-        );
-        if (!sure) return;
+        pendingClaimSlotId = slot.slotId;
+        const machines = Array.isArray(slot.claimAvailableMachineNos)
+          ? slot.claimAvailableMachineNos.map(Number).filter(Boolean)
+          : [];
+
+        els.claimTitle.textContent = 'Claim laundry slot';
+        els.claimText.innerHTML =
+          `<strong>${escapeHtml(formatSlotForMovePrompt(slot))}</strong><br>` +
+          'Choose automatic assignment or request a specific machine.';
+
+        els.claimAssignmentMode.value = 'auto';
+        const inventory = getMachineInventory();
+        const free = new Set(machines);
+        const options = inventory.map(machine => {
+          const working = machine.status === 'WORKING';
+          const selectable = working && free.has(machine.machineNo);
+          const label = working ? (selectable ? 'available' : 'unavailable for this slot')
+            : (machine.status === 'OUT_OF_ORDER' ? 'out of order' : 'status unknown');
+          return `<option value="${machine.machineNo}" ${selectable ? '' : 'disabled'}>Machine ${machine.machineNo} — ${label}</option>`;
+        });
+        els.claimMachineSelect.innerHTML = '<option value="" disabled selected>Choose a machine</option>' + options.join('');
+        els.claimAssignmentMode.querySelector('option[value="manual"]').disabled = !inventory.some(machine => machine.status === 'WORKING' && free.has(machine.machineNo));
+        els.claimAutoNote.innerHTML = '<strong>Recommended for busy booking times.</strong> The scheduler assigns the first working and available machine when your claim is saved.' +
+          (els.claimAssignmentMode.querySelector('option[value="manual"]').disabled ? '<br>Manual selection is unavailable in this view. Refresh the slots for updated machine choices.' : '');
+
+        els.claimAssignmentMode.onchange = updateClaimAssignmentMode;
+        els.claimMachineSelect.onchange = updateClaimAssignmentMode;
+        els.claimCancelBtn.onclick = closeClaimPicker;
+        els.claimOkBtn.onclick = confirmClaimPicker;
+        updateClaimAssignmentMode();
+        els.claimOverlay.classList.add('show');
       }
 
-      act('claimSlot', slotId);
-    }
+      function updateClaimAssignmentMode() {
+        const manual = els.claimAssignmentMode.value === 'manual';
+        els.claimManualFields.classList.toggle('hidden', !manual);
+        els.claimMachineSelect.disabled = !manual;
+        els.claimOkBtn.textContent = manual ? 'Claim preferred machine' : 'Claim with auto-assign';
+        const selected = els.claimMachineSelect.selectedOptions[0];
+        els.claimOkBtn.disabled = manual && (!selected || selected.disabled || !selected.value);
+      }
+
+      function closeClaimPicker() {
+        els.claimOverlay.classList.remove('show');
+        els.claimAssignmentMode.onchange = null;
+        els.claimMachineSelect.onchange = null;
+        els.claimCancelBtn.onclick = null;
+        els.claimOkBtn.onclick = null;
+        pendingClaimSlotId = '';
+      }
+
+      function confirmClaimPicker() {
+        const slotId = pendingClaimSlotId;
+        const manual = els.claimAssignmentMode.value === 'manual';
+        const preferredMachineNo = manual ? Number(els.claimMachineSelect.value || 0) : 0;
+
+        if (!slotId) {
+          closeClaimPicker();
+          return;
+        }
+
+        if (manual && (!preferredMachineNo || els.claimMachineSelect.selectedOptions[0]?.disabled)) {
+          showBanner('No preferred machine is available in the current view. Refresh the slots or use auto-assign.', 'warn');
+          return;
+        }
+
+        closeClaimPicker();
+        act('claimSlot', slotId, preferredMachineNo);
+      }
 
       async function cancelReservation(reservationId) {
         const sure = await askConfirm(
@@ -2818,6 +2986,7 @@
 
           if (!state.dashboard) state.dashboard = {};
           state.dashboard.machineReportOptions = Array.isArray(options) ? options : [];
+          renderMachineInventory();
           persistClientState();
 
           return state.dashboard.machineReportOptions;
@@ -2989,9 +3158,27 @@
         }
       }
 
+      function getMachineInventory() {
+        const options = state.dashboard && state.dashboard.machineReportOptions;
+        return (Array.isArray(options) ? options : [])
+          .map(machine => ({ machineNo: Number(machine.machineNo), status: String(machine.status || '').toUpperCase() }))
+          .filter(machine => Number.isInteger(machine.machineNo) && machine.machineNo > 0)
+          .sort((a, b) => a.machineNo - b.machineNo);
+      }
+
+      function renderMachineInventory() {
+        const machines = getMachineInventory();
+        els.machineInventory.innerHTML = machines.length ? machines.map(machine => {
+          const working = machine.status === 'WORKING';
+          const broken = machine.status === 'OUT_OF_ORDER';
+          return `<span class="machine-inventory-item ${working ? 'working' : (broken ? 'broken' : '')}">Machine ${machine.machineNo}: <strong>${working ? 'Working' : (broken ? 'Out of order' : 'Unknown')}</strong></span>`;
+        }).join('') : '<span class="helper">Machine status unavailable. Refresh slots to update.</span>';
+      }
+
       function renderDashboard() {
         const data = state.dashboard;
         if (!data) return;
+        renderMachineInventory();
         const normalizedDays = normalizeDayGroups(data.groupedDays || {});
         const cycleLabel = buildCycleLabel(normalizedDays, data.cycleStartText, data.cycleEndText);
 
@@ -3083,7 +3270,7 @@
         }
 
         els.scheduleHelper.textContent = data.bookingOpen
-          ? 'Click a free slot to claim it. If you already have a slot in that week, you can cancel it or move to another slot in that same week. You can move/cancel up to one hour after your slot starts.'
+          ? 'Click a free slot to claim it. Auto-assign is recommended for the most reliable booking, or you can request a specific currently available machine. A preferred machine is only guaranteed after the claim succeeds. You can move/cancel up to one hour after your slot starts.'
           : 'Booking is currently closed. You can still view the schedule below.';
 
         els.dayGrid.innerHTML = '';
@@ -3589,6 +3776,9 @@
 
         if (/invalid room number or access code/i.test(message)) {
           title = 'Sign in failed';
+        } else if (/machine \d+ was just claimed|machine \d+ is not currently available|selected machine is invalid/i.test(message)) {
+          title = 'Preferred machine unavailable';
+          shouldRefreshAfterClose = true;
         } else if (/already full/i.test(message)) {
           title = 'Slot is full';
           shouldRefreshAfterClose = true;
