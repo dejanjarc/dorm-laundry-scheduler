@@ -1051,7 +1051,7 @@ function getDashboardData_(resident) {
 
     const ownAvailableMachineNos =
       ownIsCurrentSlot && ownReservation
-        ? getAvailableMachineNumbersForSlot_(slot.slotId, ownReservation.reservationId)
+        ? getAlternativeMachineNumbersForReservation_(ownReservation, slot)
         : [];
 
     const ownShowChangeMachine =
@@ -1122,7 +1122,7 @@ function getDashboardData_(resident) {
       const isConcluded = isSlotConcluded_(slot);
       const isChangeLocked = !isConcluded && !canCancel;
 
-      const availableMachineNos = getAvailableMachineNumbersForSlot_(slot.slotId, r.reservationId);
+      const availableMachineNos = getAlternativeMachineNumbersForReservation_(r, slot);
       const showChangeMachine = !isConcluded && canChangeMachineForSlot_(slot);
       const canChangeMachine = showChangeMachine && availableMachineNos.length > 0;
       const machineOpenReportCount =
@@ -1180,7 +1180,7 @@ function getDashboardData_(resident) {
 
 function getDashboardDataCached_(resident) {
   const cache = CacheService.getScriptCache();
-  const key = buildCacheKey_('dashboard-v5', resident && resident.residentId ? resident.residentId : 'anonymous');
+  const key = buildCacheKey_('dashboard-v5-flexible-picker', resident && resident.residentId ? resident.residentId : 'anonymous');
   const cached = cache ? cache.get(key) : '';
 
   if (cached) {
@@ -2789,20 +2789,32 @@ function normalizePreferredMachineNo_(value) {
   return machineNo;
 }
 
-// Called under the same script lock as claimSlot. Never silently fall back.
-function selectClaimMachineNo_(slotId, preferredMachineNo) {
-  if (!preferredMachineNo) return getNextMachineNoForSlot_(slotId);
-  const workingMachines = getWorkingMachineNumbers_();
-  if (!workingMachines.includes(preferredMachineNo)) {
-    throw new Error(`Machine ${preferredMachineNo} is not currently available. Your slot was not claimed. Refresh the slots and try again.`);
+// Shared by new claims and existing-reservation machine changes. Call only
+// after acquiring the script lock and loading fresh reservation/machine data.
+// A machine change does not add a reservation or consume another booking place.
+function selectAvailableMachineNo_(slot, preferredMachineNo, reservation) {
+  const changing = Boolean(reservation);
+  const availableMachines = changing
+    ? getAlternativeMachineNumbersForReservation_(reservation, slot)
+    : getAvailableMachineNumbersForSlot_(slot.slotId, '')
+      .filter(machineNo => machineNo <= slot.capacity);
+
+  if (preferredMachineNo) {
+    if (changing && preferredMachineNo === Number(reservation.machineNo)) {
+      throw new Error('You already have that machine.');
+    }
+    if (preferredMachineNo > slot.capacity || !isMachineWorking_(preferredMachineNo)) {
+      throw new Error(`Machine ${preferredMachineNo} is not currently available. ${changing ? 'Your original reservation is unchanged.' : 'Your slot was not claimed.'} Refresh the slots and try again.`);
+    }
+    if (!availableMachines.includes(preferredMachineNo)) {
+      throw new Error(`Machine ${preferredMachineNo} was just claimed by another resident. ${changing ? 'Your original reservation is unchanged.' : 'Your slot was not claimed.'} Refresh the slots and choose another machine, or use auto-assign.`);
+    }
   }
-  const availableMachines = getAvailableMachineNumbersForSlot_(slotId, '');
-  if (!availableMachines.includes(preferredMachineNo)) {
-    throw new Error(`Machine ${preferredMachineNo} was just claimed by another resident. Your slot was not claimed. Refresh the slots and choose another machine, or use auto-assign.`);
-  }
-  // Respect operational capacity even when an existing resident is on a broken machine.
-  if (getBookableMachineCountForSlot_(slotId) <= 0) return 0;
-  return preferredMachineNo;
+
+  // Preserve the spare-place protection for new claims only. A change can
+  // use a free working machine even when the operational booking count is full.
+  if (!changing && getBookableMachineCountForSlot_(slot.slotId) <= 0) return 0;
+  return preferredMachineNo || availableMachines[0] || 0;
 }
 
 function createReservation_(resident, slot, status, note, preferredMachineNo) {
@@ -2813,7 +2825,7 @@ function createReservation_(resident, slot, status, note, preferredMachineNo) {
     .some(r => r.weekKey === slot.weekKey)) {
     throw new Error('You already used or reserved a laundry slot in this week.');
   }
-  const machineNo = status === 'confirmed' ? selectClaimMachineNo_(slot.slotId, normalizePreferredMachineNo_(preferredMachineNo)) : 0;
+  const machineNo = status === 'confirmed' ? selectAvailableMachineNo_(slot, normalizePreferredMachineNo_(preferredMachineNo)) : 0;
   if (status === 'confirmed' && !machineNo) {
     throw new Error('This slot is already full. Please refresh and choose another slot.');
   }
@@ -3004,6 +3016,13 @@ function getAvailableMachineNumbersForSlot_(slotId, excludeReservationId) {
     .filter(machineNo => !used.has(machineNo));
 }
 
+function getAlternativeMachineNumbersForReservation_(reservation, slot) {
+  if (!reservation || !slot) return [];
+  const currentMachineNo = Number(reservation.machineNo || 0);
+  return getAvailableMachineNumbersForSlot_(slot.slotId, reservation.reservationId)
+    .filter(machineNo => machineNo !== currentMachineNo && machineNo <= slot.capacity);
+}
+
 function canChangeMachineForSlot_(slot) {
   if (!slot || !slot.startIso || !slot.endIso) return false;
 
@@ -3013,6 +3032,7 @@ function canChangeMachineForSlot_(slot) {
 
   if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
 
+  // Machine changes are independent of the move/cancel commitment cutoff.
   return now >= start.getTime() && now < end.getTime();
 }
 
@@ -3131,6 +3151,10 @@ function changeReservationMachine(room, accessCode, reservationId, newMachineNo)
   ensureCycleOpenedIfDue_();
   const resident = requireResident_(room, accessCode);
 
+  if (newMachineNo === undefined || newMachineNo === null || newMachineNo === '') {
+    throw new Error('Selected machine is invalid.');
+  }
+
   let slotDate = '';
 
   const lock = acquireScriptLockOrThrow_(
@@ -3156,26 +3180,18 @@ function changeReservationMachine(room, accessCode, reservationId, newMachineNo)
     }
 
     if (!canChangeMachineForSlot_(slot)) {
-      throw new Error('Machine changes are allowed only after the slot starts.');
-    }
-
-    newMachineNo = Number(newMachineNo || 0);
-    if (!(newMachineNo >= 1 && newMachineNo <= slot.capacity)) {
-      throw new Error('Selected machine is invalid.');
-    }
-
-    if (!isMachineWorking_(newMachineNo)) {
-      throw new Error('That machine is currently out of order.');
+      throw new Error('Machine changes are allowed only while your reserved slot is running.');
     }
 
     const currentMachineNo = Number(reservation.machineNo || 0);
-    if (newMachineNo === currentMachineNo) {
-      throw new Error('You already have that machine.');
+    newMachineNo = selectAvailableMachineNo_(slot, normalizePreferredMachineNo_(newMachineNo), reservation);
+    if (!newMachineNo) {
+      throw new Error('No other working machine is available. Your original reservation is unchanged.');
     }
-
-    const availableMachineNos = getAvailableMachineNumbersForSlot_(slot.slotId, reservationId);
-    if (availableMachineNos.indexOf(newMachineNo) === -1) {
-      throw new Error('That machine is no longer available.');
+    // Re-check the running-slot window just before writing, in case the slot
+    // ended while waiting for the lock or reading authoritative sheet data.
+    if (!canChangeMachineForSlot_(slot)) {
+      throw new Error('Your slot is no longer running. The machine cannot be changed.');
     }
 
     updateReservationMachine_(

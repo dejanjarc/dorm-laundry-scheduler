@@ -1512,6 +1512,17 @@
     }
     .machine-inventory-item.working { background: var(--ok-bg); color: var(--ok); }
     .machine-inventory-item.broken { background: var(--danger-bg); color: var(--danger); }
+    .auth-hero-heading { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+    .auth-hero-heading h1 { margin: 0; }
+    .dashboard-actions .public-schedule-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; box-sizing: border-box; width: auto; min-width: 108px; }
+    @media (max-width: 680px) {
+      .auth-hero-heading { display: block; }
+      .dashboard-actions.auth-top-actions { flex-direction: row; justify-content: flex-start; align-items: center; margin: 12px 0; }
+      .auth-top-actions .btn-toolbar { width: auto; min-width: 0; }
+      .dashboard-actions .public-schedule-link { min-height: 36px; }
+      #dashboardActions { width: 100%; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; align-items: center; margin-left: 0; }
+      #dashboardActions .btn-toolbar { width: auto; min-width: 0; }
+    }
     #claimOverlay .confirm-actions { margin-top: 16px; }
     #claimOverlay select { font-size: 16px; }
     .claim-choice-note {
@@ -1579,7 +1590,7 @@
 
         <label for="claimAssignmentMode">Machine assignment</label>
         <select id="claimAssignmentMode">
-          <option value="auto">Auto-assign a machine (recommended)</option>
+          <option value="auto" id="claimAutoOption">Auto-assign a machine (recommended)</option>
           <option value="manual">Choose an available machine</option>
         </select>
 
@@ -1590,28 +1601,13 @@
         <div id="claimManualFields" class="hidden" style="margin-top:14px;">
           <label for="claimMachineSelect">Preferred machine</label>
           <select id="claimMachineSelect"></select>
-          <div class="claim-choice-warning">
-            <strong>Your preferred machine is not guaranteed until the claim finishes.</strong>
-            If another resident claims that machine first, or it is marked out of order, your reservation will not be created. Refresh and try another machine, or use auto-assign.
-          </div>
+          <div class="claim-choice-warning" id="claimChoiceWarning"></div>
         </div>
 
+        <div id="machineSelectionWindowNotice" class="claim-choice-warning hidden" role="status">Your reserved slot is no longer running. Your reservation stays unchanged.</div>
         <div class="confirm-actions">
           <button class="btn-muted" id="claimCancelBtn">Go back</button>
           <button class="btn-primary" id="claimOkBtn">Claim slot</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="confirm-overlay" id="machineOverlay" aria-live="polite" aria-modal="true" role="dialog">
-      <div class="confirm-card">
-        <h2 class="confirm-title" id="machineTitle">Change machine</h2>
-        <p class="confirm-text" id="machineText">Select another free machine for this slot.</p>
-        <label for="machineSelect">Available machines</label>
-        <select id="machineSelect"></select>
-        <div class="confirm-actions">
-          <button class="btn-muted" id="machineCancelBtn">Go back</button>
-          <button class="btn-secondary" id="machineOkBtn">Change machine</button>
         </div>
       </div>
     </div>
@@ -1677,7 +1673,7 @@
           <div>• When claiming, <b>auto-assign is recommended</b>, especially at busy times. You may optionally choose a currently available working machine, but it is only guaranteed once your claim is successfully saved. Out-of-order machines cannot be selected. The machine status list above Available slots shows current operational status.</div>
           <div>• If somebody takes your preferred machine first or it becomes out of order, <b>your reservation is not created</b>; refresh and try another machine or use auto-assign.</div>
           <div>• You can move or cancel your reservation <b>only until one hour after the slot starts</b>.</div>
-          <div>• If you want to <b>switch the machine</b>, you can do that once <b>your slot starts running</b>.</div>
+          <div>• You can <b>change machines throughout your running slot</b>, for example if your current machine stops working, using auto-assign or choosing another free working machine. If the change fails, your original reservation stays unchanged. After the first hour, the slot is <b>committed</b>: moving and cancelling are locked, but machine changes remain possible until the slot ends.</div>
           <div>• You can <b>report a machine problem at any time</b>, even if you are not currently using that machine.</div>
           <div>• If a machine already has reports, the app will show that, but you can still submit <b>your own description</b>.</div>
           <div>• A scheduler report <b>does not disable the machine automatically</b>. The dorm administrator reviews reports and decides whether to mark a machine out of order.</div>
@@ -1686,12 +1682,12 @@
             It does not contact maintenance. <strong>The machine will not get repaired unless the fault is also reported in MojŠtudent.</strong><br>
             <a href="https://student.sd-lj.si/#/okvare" target="_blank" rel="noopener noreferrer">Report the fault in MojŠtudent →</a>
           </div>
-          <div>• After the next cycle opens, <b>refresh the slots</b> to see the new schedule.</div>
+          <div>• Use <b>Public schedule</b> at the top to view existing reservations. After the next cycle opens, <b>refresh the slots</b> to see the new schedule.</div>
           <div>• If you forget your access code, use your <b>recovery key</b> to reset it.</div>
           <div style="margin-top:8px;"><strong>If something goes wrong</strong></div>
           <div>• If a slot appears available but fails to claim, <b>refresh the slots</b> and try again.</div>
           <div>• If the scheduler is <b>busy</b> and cannot complete your action, <b>refresh the slots</b> and try again.</div>
-          <div>• If your reservation becomes locked, the <b>move/cancel decision time window has passed</b>.</div>
+          <div>• If your reservation becomes committed, the <b>move/cancel decision window has passed</b>. You can still change to another free working machine until the end of your slot.</div>
           <div>• If sign-in fails, double-check your room number and access code.</div>
           <div>• If you keep having issues, contact the dorm representative.</div>
         </div>
@@ -1716,7 +1712,13 @@
 
       <section id="authView" class="stack">
         <div class="card hero">
-          <h1>Dorm 14 Laundry Scheduler</h1>
+          <div class="auth-hero-heading">
+            <h1>Dorm 14 Laundry Scheduler</h1>
+            <div class="actions dashboard-actions auth-top-actions">
+              <a class="btn-secondary btn-toolbar public-schedule-link" href="https://tinyurl.com/dorm14-schedule" target="_blank" rel="noopener noreferrer">Public schedule</a>
+              <button class="btn-secondary btn-toolbar" onclick="openDashboardHelp()">Help</button>
+            </div>
+          </div>
           <p>Welcome to the Laundry Scheduler of Dorm 14!</p>
           <br>
           <p >You can use this web app to reserve and track your laundry slots.</p>
@@ -1788,7 +1790,7 @@
               <div>• When claiming, <b>auto-assign is recommended</b>, especially at busy times. You may optionally choose a currently available working machine, but it is only guaranteed once your claim is successfully saved. Out-of-order machines cannot be selected. The machine status list above Available slots shows current operational status.</div>
               <div>• If somebody takes your preferred machine first or it becomes out of order, <b>your reservation is not created</b>; refresh and try another machine or use auto-assign.</div>
               <div>• You can move or cancel your reservation <b>only until one hour after the slot starts</b>.</div>
-              <div>• If you want to <b>switch the machine</b>, you can do that once <b>your slot starts running</b>.</div>
+              <div>• You can <b>change machines throughout your running slot</b>, for example if your current machine stops working, using auto-assign or choosing another free working machine. If the change fails, your original reservation stays unchanged. After the first hour, the slot is <b>committed</b>: moving and cancelling are locked, but machine changes remain possible until the slot ends.</div>
               <div>• You can <b>report a machine problem at any time</b>, even if you are not currently using that machine.</div>
               <div>• If a machine already has reports, the app will show that, but you can still submit <b>your own description</b>.</div>
               <div>• A scheduler report <b>does not disable the machine automatically</b>. The dorm administrator reviews reports and decides whether to mark a machine out of order.</div>
@@ -1797,14 +1799,14 @@
             It does not contact maintenance. <strong>The machine will not get repaired unless the fault is also reported in MojŠtudent.</strong><br>
             <a href="https://student.sd-lj.si/#/okvare" target="_blank" rel="noopener noreferrer">Report the fault in MojŠtudent →</a>
           </div>
-              <div>• After the next cycle opens, <b>refresh the slots</b> to see the new schedule.</div>
+              <div>• Use <b>Public schedule</b> at the top to view existing reservations. After the next cycle opens, <b>refresh the slots</b> to see the new schedule.</div>
               <div>• If you forget your access code, use your <b>recovery key</b> to reset it.</div>
               <div>• If you move to another room, update your room number in <b>Account info</b>.</div>
               <div>• If you move out permanently, please <b>delete your account</b> yourself so new residents can register for your room.</div>
               <div style="margin-top:8px;"><strong>If something goes wrong</strong></div>
               <div>• If a slot appears available but fails to claim, <b>refresh the slots</b> and try again.</div>
               <div>• If the scheduler is <b>busy</b> and cannot complete your action, <b>refresh the slots</b> and try again.</div>
-              <div>• If your reservation becomes locked, the <b>move/cancel decision time window has passed</b>.</div>
+              <div>• If your reservation becomes committed, the <b>move/cancel decision window has passed</b>. You can still change to another free working machine until the end of your slot.</div>
               <div>• If sign-in fails, double-check your room number and access code.</div>
               <div>• Inactive accounts may later be disabled automatically. If your account was disabled, contact the dorm representative.</div>
               <div>• If you keep having issues or something else went wrong, contact the dorm representative.</div>
@@ -1823,6 +1825,7 @@
             <p id="dashboardSubtitle">Signed in.</p>
           </div>
           <div class="actions dashboard-actions" id="dashboardActions">
+            <a class="btn-secondary btn-toolbar public-schedule-link" href="https://tinyurl.com/dorm14-schedule" target="_blank" rel="noopener noreferrer">Public schedule</a>
             <button class="btn-secondary btn-toolbar" onclick="openDashboardHelp()">Help</button>
             <button class="btn-muted btn-toolbar" onclick="logout()">Log out</button>
           </div>
@@ -1962,14 +1965,13 @@
       let refreshRequestInFlight = false;
       let refreshCooldownUntilMs = 0;
       let refreshCooldownTimer = null;
-      let pendingClaimSlotId = '';
-      let pendingMachineReservationId = null;
+      let pendingMachineSelection = null;
       let pendingReportReservationId = '';
 
       const STORAGE_KEYS = {
         auth: 'dormLaundryAuth',
-        dashboard: 'dormLaundryDashboardV5',
-        refreshCooldownUntil: 'dormLaundryRefreshCooldownUntilV5',
+        dashboard: 'dormLaundryDashboardV5SharedPicker',
+        refreshCooldownUntil: 'dormLaundryRefreshCooldownUntilV5SharedPicker',
       };
 
       const els = {
@@ -2037,17 +2039,14 @@
         claimTitle: document.getElementById('claimTitle'),
         claimText: document.getElementById('claimText'),
         claimAssignmentMode: document.getElementById('claimAssignmentMode'),
+        claimAutoOption: document.getElementById('claimAutoOption'),
         claimAutoNote: document.getElementById('claimAutoNote'),
+        claimChoiceWarning: document.getElementById('claimChoiceWarning'),
+        machineSelectionWindowNotice: document.getElementById('machineSelectionWindowNotice'),
         claimManualFields: document.getElementById('claimManualFields'),
         claimMachineSelect: document.getElementById('claimMachineSelect'),
         claimCancelBtn: document.getElementById('claimCancelBtn'),
         claimOkBtn: document.getElementById('claimOkBtn'),
-        machineOverlay: document.getElementById('machineOverlay'),
-        machineTitle: document.getElementById('machineTitle'),
-        machineText: document.getElementById('machineText'),
-        machineSelect: document.getElementById('machineSelect'),
-        machineCancelBtn: document.getElementById('machineCancelBtn'),
-        machineOkBtn: document.getElementById('machineOkBtn'),
         reportOverlay: document.getElementById('reportOverlay'),
         reportTitle: document.getElementById('reportTitle'),
         reportText: document.getElementById('reportText'),
@@ -2794,7 +2793,7 @@
         if (slot && isSlotRunning(slot) && !isDecisionWindowOpen(slot)) {
           const sure = await askConfirm(
             'Final claim?',
-            'This slot is already past the first hour. If you claim it now, you will not be able to move or cancel it later.',
+            'This slot is already past the first hour. If you claim it now, you will not be able to move or cancel it. You can still change to another free working machine until the slot ends.',
             'Continue',
             'btn-danger'
           );
@@ -2811,75 +2810,108 @@
 
       function openClaimPicker(slot) {
         if (!slot || !slot.slotId) return;
-
-        pendingClaimSlotId = slot.slotId;
-        const machines = Array.isArray(slot.claimAvailableMachineNos)
-          ? slot.claimAvailableMachineNos.map(Number).filter(Boolean)
-          : [];
-
-        els.claimTitle.textContent = 'Claim laundry slot';
-        els.claimText.innerHTML =
-          `<strong>${escapeHtml(formatSlotForMovePrompt(slot))}</strong><br>` +
-          'Choose automatic assignment or request a specific machine.';
-
-        els.claimAssignmentMode.value = 'auto';
-        const inventory = getMachineInventory();
-        const free = new Set(machines);
-        const options = inventory.map(machine => {
-          const working = machine.status === 'WORKING';
-          const selectable = working && free.has(machine.machineNo);
-          const label = working ? (selectable ? 'available' : 'unavailable for this slot')
-            : (machine.status === 'OUT_OF_ORDER' ? 'out of order' : 'status unknown');
-          return `<option value="${machine.machineNo}" ${selectable ? '' : 'disabled'}>Machine ${machine.machineNo} — ${label}</option>`;
-        });
-        els.claimMachineSelect.innerHTML = '<option value="" disabled selected>Choose a machine</option>' + options.join('');
-        els.claimAssignmentMode.querySelector('option[value="manual"]').disabled = !inventory.some(machine => machine.status === 'WORKING' && free.has(machine.machineNo));
-        els.claimAutoNote.innerHTML = '<strong>Recommended for busy booking times.</strong> The scheduler assigns the first working and available machine when your claim is saved.' +
-          (els.claimAssignmentMode.querySelector('option[value="manual"]').disabled ? '<br>Manual selection is unavailable in this view. Refresh the slots for updated machine choices.' : '');
-
-        els.claimAssignmentMode.onchange = updateClaimAssignmentMode;
-        els.claimMachineSelect.onchange = updateClaimAssignmentMode;
-        els.claimCancelBtn.onclick = closeClaimPicker;
-        els.claimOkBtn.onclick = confirmClaimPicker;
-        updateClaimAssignmentMode();
-        els.claimOverlay.classList.add('show');
+        openMachineSelection({ slot, reservation: null });
       }
 
-      function updateClaimAssignmentMode() {
+      function isMachineChangeWindowOpen(reservation) {
+        return isSlotRunning(reservation);
+      }
+
+      function openMachineChangePicker(reservationId) {
+        const reservation = findReservationCardById(reservationId);
+        if (!reservation || !isMachineChangeWindowOpen(reservation)) {
+          showNotice('Machine change unavailable', 'You can change machines only while your reserved slot is running, including after the first hour.');
+          return;
+        }
+        openMachineSelection({ slot: reservation, reservation });
+      }
+
+      // Both actions use the same dialog, options, validation and submit flow.
+      function openMachineSelection({ slot, reservation }) {
+        const changing = Boolean(reservation);
+        const currentMachine = changing ? Number(reservation.machineNo) : 0;
+        const machineNos = changing ? reservation.availableMachineNos : slot.claimAvailableMachineNos;
+        const free = new Set((Array.isArray(machineNos) ? machineNos : []).map(Number).filter(n => n > 0 && n !== currentMachine));
+        const inventory = getMachineInventory();
+        const hasAlternative = inventory.some(machine => machine.status === 'WORKING' && free.has(machine.machineNo));
+        pendingMachineSelection = { slotId: slot.slotId, reservationId: changing ? reservation.reservationId : '' };
+
+        els.claimTitle.textContent = changing ? 'Change machine' : 'Claim laundry slot';
+        els.claimText.innerHTML = `<strong>${escapeHtml(formatSlotForMovePrompt(slot))}</strong><br>` + (changing
+          ? `Your current machine is <strong>Machine ${escapeHtml(String(currentMachine))}</strong>. You can switch to another free working machine until the end of your running slot. Your reservation stays in the same time slot.`
+          : 'Choose automatic assignment or request a specific machine.');
+        els.claimAutoOption.textContent = changing ? 'Auto-assign another machine' : 'Auto-assign a machine (recommended)';
+        els.claimAssignmentMode.value = changing && hasAlternative ? 'manual' : 'auto';
+        els.claimAssignmentMode.querySelector('option[value="manual"]').disabled = !hasAlternative;
+        els.claimAutoNote.innerHTML = changing
+          ? 'The scheduler will choose the first free working machine other than your current machine. If none is available, your current reservation stays unchanged.'
+          : '<strong>Recommended for busy booking times.</strong> The scheduler assigns the first working and available machine when your claim is saved.';
+        if (!hasAlternative) els.claimAutoNote.innerHTML += '<br>No machine choices are available in this view. Refresh the slots for updated machine availability.';
+        els.claimChoiceWarning.innerHTML = changing
+          ? '<strong>Your preferred machine is not guaranteed until the change finishes.</strong> If somebody takes it first or it becomes out of order, your existing reservation and machine stay unchanged. Refresh and try another machine, or use auto-assign.'
+          : '<strong>Your preferred machine is not guaranteed until the claim finishes.</strong> If somebody takes it first or it becomes out of order, your reservation will not be created. Refresh and try another machine, or use auto-assign.';
+
+        els.claimMachineSelect.innerHTML = '<option value="" disabled selected>Choose a machine</option>' + inventory.map(machine => {
+          const working = machine.status === 'WORKING';
+          const current = changing && machine.machineNo === currentMachine;
+          const selectable = working && !current && free.has(machine.machineNo);
+          const status = working ? (current ? 'your current machine' : selectable ? 'available' : 'unavailable for this slot')
+            : (machine.status === 'OUT_OF_ORDER' ? 'out of order' : 'status unknown');
+          const label = current && !working ? `your current machine · ${status}` : status;
+          return `<option value="${machine.machineNo}" ${selectable ? '' : 'disabled'}>Machine ${machine.machineNo} — ${label}</option>`;
+        }).join('');
+        pendingMachineSelection.hasAlternative = hasAlternative;
+        els.claimAssignmentMode.onchange = updateMachineSelectionMode;
+        els.claimMachineSelect.onchange = updateMachineSelectionMode;
+        els.claimCancelBtn.onclick = closeMachineSelection;
+        els.claimOkBtn.onclick = confirmMachineSelection;
+        updateMachineSelectionMode();
+        els.claimOverlay.classList.add('show');
+        const card = els.claimOverlay.querySelector('.confirm-card');
+        if (card) card.scrollTop = 0;
+        els.claimOverlay.scrollTop = 0;
+      }
+
+      function updateMachineSelectionMode() {
+        const selection = pendingMachineSelection;
+        const changing = Boolean(selection && selection.reservationId);
         const manual = els.claimAssignmentMode.value === 'manual';
+        els.claimAutoNote.classList.toggle('hidden', manual);
         els.claimManualFields.classList.toggle('hidden', !manual);
         els.claimMachineSelect.disabled = !manual;
-        els.claimOkBtn.textContent = manual ? 'Claim preferred machine' : 'Claim with auto-assign';
+        els.claimOkBtn.textContent = changing
+          ? (manual ? 'Change to preferred machine' : 'Auto-assign another machine')
+          : (manual ? 'Claim preferred machine' : 'Claim with auto-assign');
         const selected = els.claimMachineSelect.selectedOptions[0];
-        els.claimOkBtn.disabled = manual && (!selected || selected.disabled || !selected.value);
+        const windowClosed = changing && !isMachineChangeWindowOpen(findReservationCardById(selection.reservationId));
+        els.machineSelectionWindowNotice.classList.toggle('hidden', !windowClosed);
+        els.claimOkBtn.disabled = !selection || (changing && !selection.hasAlternative) ||
+          (manual && (!selected || selected.disabled || !selected.value)) || windowClosed;
       }
 
-      function closeClaimPicker() {
+      function closeMachineSelection() {
         els.claimOverlay.classList.remove('show');
         els.claimAssignmentMode.onchange = null;
         els.claimMachineSelect.onchange = null;
         els.claimCancelBtn.onclick = null;
         els.claimOkBtn.onclick = null;
-        pendingClaimSlotId = '';
+        pendingMachineSelection = null;
       }
 
-      function confirmClaimPicker() {
-        const slotId = pendingClaimSlotId;
+      function confirmMachineSelection() {
+        const selection = pendingMachineSelection;
         const manual = els.claimAssignmentMode.value === 'manual';
         const preferredMachineNo = manual ? Number(els.claimMachineSelect.value || 0) : 0;
-
-        if (!slotId) {
-          closeClaimPicker();
+        if (!selection || !selection.slotId) return closeMachineSelection();
+        if (selection.reservationId && !isMachineChangeWindowOpen(findReservationCardById(selection.reservationId))) {
+          closeMachineSelection();
+          showNotice('Machine change unavailable', 'Your reserved slot is no longer running. Your original reservation is unchanged.');
           return;
         }
-
-        if (manual && (!preferredMachineNo || els.claimMachineSelect.selectedOptions[0]?.disabled)) {
-          showBanner('No preferred machine is available in the current view. Refresh the slots or use auto-assign.', 'warn');
-          return;
-        }
-
-        closeClaimPicker();
-        act('claimSlot', slotId, preferredMachineNo);
+        if (els.claimOkBtn.disabled || (manual && (!preferredMachineNo || els.claimMachineSelect.selectedOptions[0]?.disabled))) return;
+        closeMachineSelection();
+        if (selection.reservationId) act('changeReservationMachine', selection.reservationId, preferredMachineNo);
+        else act('claimSlot', selection.slotId, preferredMachineNo);
       }
 
       async function cancelReservation(reservationId) {
@@ -2913,45 +2945,6 @@
         return (state.dashboard && state.dashboard.reservationCards || []).find(
           item => item.reservationId === reservationId
         ) || null;
-      }
-
-      function openMachinePicker(reservationId) {
-        const item = findReservationCardById(reservationId);
-        if (!item || !item.availableMachineNos || !item.availableMachineNos.length) return;
-
-        pendingMachineReservationId = reservationId;
-
-        els.machineTitle.textContent = 'Change machine';
-        els.machineText.innerHTML =
-          `Your current machine is <strong>${escapeHtml(String(item.machineNo || '—'))}</strong> ` +
-          `for <strong>${escapeHtml(item.dayLabel)} · ${escapeHtml(item.slotLabel)}</strong>. ` +
-          `Select another free machine for the same slot.`;
-
-        els.machineSelect.innerHTML = item.availableMachineNos
-          .map(n => `<option value="${n}">Machine ${n}</option>`)
-          .join('');
-
-        els.machineOverlay.classList.add('show');
-
-        els.machineCancelBtn.onclick = closeMachinePicker;
-        els.machineOkBtn.onclick = confirmMachineChange;
-      }
-
-      function closeMachinePicker() {
-        els.machineOverlay.classList.remove('show');
-        els.machineCancelBtn.onclick = null;
-        els.machineOkBtn.onclick = null;
-        pendingMachineReservationId = null;
-      }
-
-      function confirmMachineChange() {
-        const reservationId = pendingMachineReservationId;
-        const newMachineNo = Number(els.machineSelect.value || 0);
-
-        closeMachinePicker();
-
-        if (!reservationId || !newMachineNo) return;
-        act('changeReservationMachine', reservationId, newMachineNo);
       }
 
       function getMachineReportOption(machineNo) {
@@ -3142,8 +3135,7 @@
 
         if (existing) return;
 
-        const helpButton = Array.from(els.dashboardActions.querySelectorAll('button'))
-          .find(btn => btn.textContent.trim() === 'Help');
+        const firstPublicAction = els.dashboardActions.querySelector('.public-schedule-link') || els.dashboardActions.querySelector('button');
 
         const adminBtn = document.createElement('button');
         adminBtn.id = 'adminDashboardBtn';
@@ -3151,8 +3143,8 @@
         adminBtn.textContent = 'Admin dashboard';
         adminBtn.onclick = openAdminDashboard;
 
-        if (helpButton) {
-          els.dashboardActions.insertBefore(adminBtn, helpButton);
+        if (firstPublicAction) {
+          els.dashboardActions.insertBefore(adminBtn, firstPublicAction);
         } else {
           els.dashboardActions.prepend(adminBtn);
         }
@@ -3173,6 +3165,13 @@
           const broken = machine.status === 'OUT_OF_ORDER';
           return `<span class="machine-inventory-item ${working ? 'working' : (broken ? 'broken' : '')}">Machine ${machine.machineNo}: <strong>${working ? 'Working' : (broken ? 'Out of order' : 'Unknown')}</strong></span>`;
         }).join('') : '<span class="helper">Machine status unavailable. Refresh slots to update.</span>';
+      }
+
+      function renderMachineChangeButton(reservationId, machineNos, slot) {
+        if (!reservationId || isSlotFinishedForSchedule(slot)) return '';
+        const hasAlternative = Array.isArray(machineNos) && machineNos.length > 0;
+        const visible = isMachineChangeWindowOpen(slot);
+        return `<button class="btn-secondary js-change-machine ${visible ? '' : 'hidden'}" data-has-alternative="${hasAlternative}" ${visible && hasAlternative ? '' : 'disabled'} onclick="openMachineChangePicker('${reservationId}')">${hasAlternative ? 'Change machine' : 'No free machine'}</button>`;
       }
 
       function renderDashboard() {
@@ -3233,11 +3232,7 @@
                   ? `
                     <div class="helper" style="margin-top:6px;">
                       <strong>⚠ This machine is currently marked out of order.</strong>
-                      ${
-                        item.showChangeMachine
-                          ? ' You can switch to another working machine if one is free.'
-                          : ''
-                      }
+                      You can change to another free working machine while your slot is running.
                     </div>
                   `
                   : ''
@@ -3246,16 +3241,12 @@
               </div>
               <div class="actions">
                 ${item.canCancel
-                  ? `<button class="btn-danger" onclick="cancelReservation('${item.reservationId}')">Cancel</button>`
+                  ? `<button class="btn-danger js-cancel-reservation" onclick="cancelReservation('${item.reservationId}')">Cancel</button>`
                   : (item.isConcluded
                       ? '<button class="btn-muted" disabled>Finished</button>'
                       : '<button class="btn-muted" disabled>Locked</button>')}
                 
-                ${item.showChangeMachine
-                  ? `<button class="btn-secondary" ${item.canChangeMachine ? `onclick="openMachinePicker('${item.reservationId}')"` : 'disabled'}>
-                      ${item.canChangeMachine ? 'Change machine' : 'No free machine'}
-                    </button>`
-                  : ''}
+                ${renderMachineChangeButton(item.reservationId, item.availableMachineNos, item)}
 
                 ${item.machineNo
                   ? `<button class="btn-danger" onclick="openMachineReport('${item.reservationId}')">Report problem</button>`
@@ -3270,7 +3261,7 @@
         }
 
         els.scheduleHelper.textContent = data.bookingOpen
-          ? 'Click a free slot to claim it. Auto-assign is recommended for the most reliable booking, or you can request a specific currently available machine. A preferred machine is only guaranteed after the claim succeeds. You can move/cancel up to one hour after your slot starts.'
+          ? 'Click a free slot to claim it. Auto-assign is recommended for the most reliable booking, or you can request a specific currently available machine. A preferred machine is only guaranteed after the claim succeeds. You can move or cancel until one hour after your slot starts. Machine changes are available throughout your running slot.'
           : 'Booking is currently closed. You can still view the schedule below.';
 
         els.dayGrid.innerHTML = '';
@@ -3331,7 +3322,7 @@
 
               if (slot.canCancel) {
                 buttons.push(
-                  `<button class="btn-danger" onclick="cancelReservation('${slot.ownReservationId}')">Cancel</button>`
+                  `<button class="btn-danger js-cancel-reservation" onclick="cancelReservation('${slot.ownReservationId}')">Cancel</button>`
                 );
               } else if (slot.isConcluded) {
                 buttons.push('<button class="btn-muted" disabled>Finished</button>');
@@ -3339,13 +3330,7 @@
                 buttons.push('<button class="btn-muted" disabled>Locked</button>');
               }
 
-              if (slot.showChangeMachine) {
-                buttons.push(
-                  `<button class="btn-secondary" ${slot.canChangeMachine ? `onclick="openMachinePicker('${slot.ownReservationId}')"` : 'disabled'}>
-                    ${slot.canChangeMachine ? 'Change machine' : 'No free machine'}
-                  </button>`
-                );
-              }
+              buttons.push(renderMachineChangeButton(slot.ownReservationId, slot.availableMachineNos, slot));
 
               if (slot.ownMachineNo) {
                 buttons.push(
@@ -3357,7 +3342,7 @@
             } else if (slot.action === 'claim') {
               actionHtml = `<button class="btn-primary" onclick="claim('${slot.slotId}')">Claim</button>`;
             } else if (slot.action === 'move') {
-              actionHtml = `<button class="btn-secondary" onclick="moveReservation('${slot.ownReservationId}', '${slot.slotId}')">Move here</button>`;
+              actionHtml = `<button class="btn-secondary js-move-reservation" data-reservation-id="${escapeHtml(slot.ownReservationId)}" onclick="moveReservation('${slot.ownReservationId}', '${slot.slotId}')">Move here</button>`;
             } else if (slot.action === 'full') {
               actionHtml = '<button class="btn-muted" disabled>Full</button>';
             } else if (slot.action === 'past') {
@@ -3560,13 +3545,13 @@
           if (now < cutoffMs) {
             return {
               phase: 'running',
-              text: `You can still move/cancel for ${formatCompactDuration(cutoffMs - now)}`
+              text: `You can still move or cancel for ${formatCompactDuration(cutoffMs - now)}. Machine changes are allowed until the slot ends.`
             };
           }
 
           return {
             phase: 'locked',
-            text: 'Running now · move/cancel closed'
+            text: 'Running now · committed (move/cancel locked; machine changes allowed)'
           };
         }
 
@@ -3585,6 +3570,21 @@
           }
 
           const state = computeSlotLiveState(startIso, endIso, isOwned);
+          if (isOwned && parent) {
+            parent.querySelectorAll('.js-change-machine').forEach(button => {
+              const visible = state.phase === 'running' || state.phase === 'locked';
+              button.classList.toggle('hidden', !visible);
+              button.disabled = !visible || button.dataset.hasAlternative !== 'true';
+            });
+            parent.querySelectorAll('.js-cancel-reservation').forEach(button => {
+              if (state.phase === 'locked' || state.phase === 'finished') {
+                button.disabled = true;
+                button.textContent = state.phase === 'finished' ? 'Finished' : 'Locked';
+                button.classList.remove('btn-danger');
+                button.classList.add('btn-muted');
+              }
+            });
+          }
 
           note.classList.remove('upcoming', 'running', 'locked');
           note.textContent = '';
@@ -3610,13 +3610,27 @@
         });
       }
 
+      function updateLiveReservationActions() {
+        document.querySelectorAll('.js-move-reservation:not(:disabled)').forEach(button => {
+          const reservation = findReservationCardById(button.dataset.reservationId);
+          if (!reservation || !isDecisionWindowOpen(reservation) || isSlotFinishedForSchedule(reservation)) {
+            button.disabled = true;
+            button.textContent = 'Used this week';
+            button.classList.remove('btn-secondary');
+            button.classList.add('btn-muted');
+          }
+        });
+        if (pendingMachineSelection && pendingMachineSelection.reservationId) updateMachineSelectionMode();
+      }
+
       function startLiveSlotIndicatorTimer() {
         if (liveSlotTimer) {
           window.clearInterval(liveSlotTimer);
           liveSlotTimer = null;
         }
-        updateLiveSlotIndicators();
-        liveSlotTimer = window.setInterval(updateLiveSlotIndicators, 1000);
+        const tick = () => { updateLiveSlotIndicators(); updateLiveReservationActions(); };
+        tick();
+        liveSlotTimer = window.setInterval(tick, 1000);
       }
 
       function stopLiveSlotIndicatorTimer() {
@@ -3776,7 +3790,7 @@
 
         if (/invalid room number or access code/i.test(message)) {
           title = 'Sign in failed';
-        } else if (/machine \d+ was just claimed|machine \d+ is not currently available|selected machine is invalid/i.test(message)) {
+        } else if (/machine \d+ was just claimed|machine \d+ is not currently available|no other working machine is available|selected machine is invalid/i.test(message)) {
           title = 'Preferred machine unavailable';
           shouldRefreshAfterClose = true;
         } else if (/already full/i.test(message)) {
@@ -3787,6 +3801,9 @@
           shouldRefreshAfterClose = true;
         } else if (/selected slot was not found/i.test(message)) {
           title = 'Slot is no longer available';
+          shouldRefreshAfterClose = true;
+        } else if (/slot has already concluded and the machine|machine changes are allowed only while|slot is no longer running/i.test(message)) {
+          title = 'Machine change unavailable';
           shouldRefreshAfterClose = true;
         } else if (/change cutoff/i.test(message)) {
           title = 'Reservation locked';
